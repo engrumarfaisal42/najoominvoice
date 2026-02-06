@@ -1,0 +1,28 @@
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Invoice {
+  id: string;
+  customer_id: string;
+  invoice_number: string;
+  invoice_date: string;
+  amount: number;
+  image_url: string | null;
+  status: 'pending' | 'sent' | 'paid' | 'objected';
+  sent_at: string | null;
+  language: 'english' | 'arabic';
+  created_at: string;
+  updated_at: string;
+  customer?: Customer;
+}
+
+export interface ExtractedInvoiceData {
+  invoice_number: string;
+  invoice_date: string;
+  amount: string;
+}
