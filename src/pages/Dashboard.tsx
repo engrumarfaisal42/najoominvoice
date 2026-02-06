@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useInvoices } from '@/hooks/useInvoices';
+import { useCustomerBalance } from '@/hooks/useCustomerBalance';
 import { 
   Camera, 
   Users, 
@@ -18,6 +19,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { customers } = useCustomers();
   const { invoices } = useInvoices();
+  const { totalOutstanding } = useCustomerBalance();
 
   const stats = {
     totalCustomers: customers.length,
@@ -25,9 +27,7 @@ export default function Dashboard() {
     pendingInvoices: invoices.filter(i => i.status === 'pending').length,
     sentInvoices: invoices.filter(i => i.status === 'sent').length,
     paidInvoices: invoices.filter(i => i.status === 'paid').length,
-    totalOutstanding: invoices
-      .filter(i => i.status !== 'paid')
-      .reduce((sum, i) => sum + Number(i.amount), 0),
+    totalOutstanding,
   };
 
   const recentInvoices = invoices.slice(0, 3);

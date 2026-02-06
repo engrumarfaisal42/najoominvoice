@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { displayPhone } from '@/lib/phoneFormat';
 import { 
   Search, Phone, Edit, Trash2, ChevronRight, 
-  DollarSign, Bell, FileText, MoreVertical 
+  DollarSign, Bell, FileText, MoreVertical, CreditCard 
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -80,6 +80,7 @@ export default function CustomerList({
         ) : (
           filtered.map((customer) => {
             const balance = getBalance?.(customer.id) || 0;
+            const creditBalance = Number(customer.credit_balance ?? 0);
             
             return (
               <Card 
@@ -101,9 +102,17 @@ export default function CustomerList({
                         <span>{displayPhone(customer.phone)}</span>
                       </div>
                       {getBalance && (
-                        <p className={`text-sm font-medium mt-1 ${balance > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                          Balance: {balance.toFixed(2)} SAR
-                        </p>
+                        <div className="mt-1 space-y-0.5">
+                          <p className={`text-sm font-medium ${balance > 0 ? 'text-destructive' : 'text-success'}`}>
+                            Balance: {balance.toFixed(2)} SAR
+                          </p>
+                          {creditBalance > 0 && (
+                            <p className="text-xs text-success flex items-center gap-1">
+                              <CreditCard className="w-3 h-3" />
+                              Credit: {creditBalance.toFixed(2)} SAR
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                     {selectable ? (
@@ -115,7 +124,7 @@ export default function CustomerList({
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                            className="text-success hover:text-success hover:bg-success/10"
                             onClick={(e) => {
                               e.stopPropagation();
                               onPayment(customer);
@@ -142,7 +151,7 @@ export default function CustomerList({
                               <Edit className="w-4 h-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
-                            {onPayment && balance > 0 && (
+                            {onPayment && (
                               <DropdownMenuItem onClick={() => onPayment(customer)}>
                                 <DollarSign className="w-4 h-4 mr-2" />
                                 Record Payment

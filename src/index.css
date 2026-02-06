@@ -76,6 +76,9 @@
     --whatsapp-foreground: 0 0% 100%;
     --invoice: 217 91% 60%;
     --invoice-foreground: 0 0% 100%;
+    --success: 142 76% 46%;
+    --warning: 38 92% 50%;
+    --danger: 0 84% 60%;
   }
 }
 

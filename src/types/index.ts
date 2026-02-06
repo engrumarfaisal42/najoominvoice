@@ -3,6 +3,7 @@ export interface Customer {
   name: string;
   name_ar?: string;
   phone: string;
+  credit_balance: number;
   created_at: string;
   updated_at: string;
 }
