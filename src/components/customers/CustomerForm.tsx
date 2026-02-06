@@ -1,23 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Customer } from '@/types';
 import { displayPhone, validateSaudiPhone, formatSaudiPhone } from '@/lib/phoneFormat';
-import { UserPlus, Save } from 'lucide-react';
+import { transliterateToArabic } from '@/lib/transliterate';
+import { UserPlus, Save, Languages } from 'lucide-react';
 
 interface CustomerFormProps {
   customer?: Customer;
-  onSubmit: (data: { name: string; phone: string }) => void;
+  onSubmit: (data: { name: string; name_ar?: string; phone: string }) => void;
   onCancel?: () => void;
   isLoading?: boolean;
 }
 
 export default function CustomerForm({ customer, onSubmit, onCancel, isLoading }: CustomerFormProps) {
   const [name, setName] = useState(customer?.name || '');
+  const [nameAr, setNameAr] = useState(customer?.name_ar || '');
   const [phone, setPhone] = useState(customer?.phone || '');
   const [phoneError, setPhoneError] = useState('');
+
+  // Auto-transliterate English name to Arabic
+  useEffect(() => {
+    if (name && !customer?.name_ar) {
+      const transliterated = transliterateToArabic(name);
+      setNameAr(transliterated);
+    }
+  }, [name, customer?.name_ar]);
 
   const handlePhoneChange = (value: string) => {
     setPhone(value);
@@ -34,7 +44,11 @@ export default function CustomerForm({ customer, onSubmit, onCancel, isLoading }
       setPhoneError('Please enter a valid Saudi mobile number');
       return;
     }
-    onSubmit({ name, phone: formatSaudiPhone(phone) });
+    onSubmit({ 
+      name, 
+      name_ar: nameAr || undefined,
+      phone: formatSaudiPhone(phone) 
+    });
   };
 
   return (
@@ -48,7 +62,7 @@ export default function CustomerForm({ customer, onSubmit, onCancel, isLoading }
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Customer Name</Label>
+            <Label htmlFor="name">Customer Name (English)</Label>
             <Input
               id="name"
               value={name}
@@ -58,6 +72,25 @@ export default function CustomerForm({ customer, onSubmit, onCancel, isLoading }
               required
             />
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="nameAr" className="flex items-center gap-2">
+              <Languages className="w-4 h-4" />
+              Arabic Name (Auto-generated)
+            </Label>
+            <Input
+              id="nameAr"
+              value={nameAr}
+              onChange={(e) => setNameAr(e.target.value)}
+              placeholder="الاسم بالعربية"
+              className="h-12 text-right"
+              dir="rtl"
+            />
+            <p className="text-xs text-muted-foreground">
+              Auto-transliterated from English. You can edit manually if needed.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="phone">Phone Number (+966)</Label>
             <Input
@@ -78,6 +111,7 @@ export default function CustomerForm({ customer, onSubmit, onCancel, isLoading }
               <p className="text-sm text-destructive">{phoneError}</p>
             )}
           </div>
+
           <div className="flex gap-3 pt-2">
             {onCancel && (
               <Button type="button" variant="outline" onClick={onCancel} className="flex-1 h-12">

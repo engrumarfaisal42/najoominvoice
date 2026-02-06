@@ -40,6 +40,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          name_ar: string | null
           phone: string
           updated_at: string
         }
@@ -47,6 +48,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          name_ar?: string | null
           phone: string
           updated_at?: string
         }
@@ -54,6 +56,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          name_ar?: string | null
           phone?: string
           updated_at?: string
         }
@@ -102,6 +105,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          customer_id: string
+          id: string
+          language: string | null
+          notes: string | null
+          payment_date: string
+          sent_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          customer_id: string
+          id?: string
+          language?: string | null
+          notes?: string | null
+          payment_date?: string
+          sent_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          customer_id?: string
+          id?: string
+          language?: string | null
+          notes?: string | null
+          payment_date?: string
+          sent_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"

@@ -1,6 +1,7 @@
 export interface Customer {
   id: string;
   name: string;
+  name_ar?: string;
   phone: string;
   created_at: string;
   updated_at: string;

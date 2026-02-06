@@ -28,6 +28,7 @@ export default function MessagePreview({
 
   const message = generateWhatsAppMessage({
     customerName: customer.name,
+    customerNameAr: customer.name_ar,
     invoiceDate: invoice.invoice_date,
     invoiceNumber: invoice.invoice_number,
     currentAmount: Number(invoice.amount),
