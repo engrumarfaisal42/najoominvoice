@@ -38,6 +38,7 @@ export type Database = {
       customers: {
         Row: {
           created_at: string
+          credit_balance: number
           id: string
           name: string
           name_ar: string | null
@@ -46,6 +47,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          credit_balance?: number
           id?: string
           name: string
           name_ar?: string | null
@@ -54,6 +56,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          credit_balance?: number
           id?: string
           name?: string
           name_ar?: string | null

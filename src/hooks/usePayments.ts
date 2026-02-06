@@ -57,6 +57,7 @@ export function usePayments(customerId?: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
       toast({ title: 'Payment recorded successfully' });
     },
     onError: () => {
@@ -84,6 +85,115 @@ export function usePayments(customerId?: string) {
     },
   });
 
+  // Auto-mark invoices as paid and handle credit
+  const processPayment = useMutation({
+    mutationFn: async ({ 
+      customerId, 
+      paymentAmount 
+    }: { 
+      customerId: string; 
+      paymentAmount: number;
+    }) => {
+      // Get all unpaid invoices for this customer, ordered by date (oldest first)
+      const { data: unpaidInvoices, error: invoicesError } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('customer_id', customerId)
+        .neq('status', 'paid')
+        .order('invoice_date', { ascending: true });
+      
+      if (invoicesError) throw invoicesError;
+
+      // Get current customer data for credit balance
+      const { data: customer, error: customerError } = await supabase
+        .from('customers')
+        .select('credit_balance')
+        .eq('id', customerId)
+        .single();
+      
+      if (customerError) throw customerError;
+
+      // Calculate total due
+      const totalDue = unpaidInvoices?.reduce((sum, inv) => sum + Number(inv.amount), 0) || 0;
+      const currentCredit = Number(customer?.credit_balance || 0);
+      
+      // Available payment = new payment + existing credit
+      let availablePayment = paymentAmount + currentCredit;
+      const invoicesToPay: string[] = [];
+
+      // Mark invoices as paid (oldest first)
+      if (unpaidInvoices) {
+        for (const invoice of unpaidInvoices) {
+          if (availablePayment >= Number(invoice.amount)) {
+            invoicesToPay.push(invoice.id);
+            availablePayment -= Number(invoice.amount);
+          } else {
+            break; // Not enough to pay this invoice fully
+          }
+        }
+      }
+
+      // Update invoices to paid
+      if (invoicesToPay.length > 0) {
+        const { error: updateError } = await supabase
+          .from('invoices')
+          .update({ status: 'paid' })
+          .in('id', invoicesToPay);
+        
+        if (updateError) throw updateError;
+      }
+
+      // Calculate remaining credit (if overpaid)
+      const totalPaidInvoices = invoicesToPay.length > 0 && unpaidInvoices
+        ? unpaidInvoices
+            .filter(inv => invoicesToPay.includes(inv.id))
+            .reduce((sum, inv) => sum + Number(inv.amount), 0)
+        : 0;
+      
+      const newCredit = paymentAmount + currentCredit - totalPaidInvoices;
+      
+      // Update customer credit balance if there's overpayment
+      if (newCredit > 0) {
+        const { error: creditError } = await supabase
+          .from('customers')
+          .update({ credit_balance: newCredit })
+          .eq('id', customerId);
+        
+        if (creditError) throw creditError;
+      } else {
+        // Reset credit to 0 if fully used
+        const { error: creditError } = await supabase
+          .from('customers')
+          .update({ credit_balance: 0 })
+          .eq('id', customerId);
+        
+        if (creditError) throw creditError;
+      }
+
+      return {
+        invoicesPaid: invoicesToPay.length,
+        creditBalance: Math.max(0, newCredit),
+      };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      
+      if (data.invoicesPaid > 0) {
+        toast({ 
+          title: `${data.invoicesPaid} invoice(s) marked as paid`,
+          description: data.creditBalance > 0 
+            ? `Credit balance: ${data.creditBalance.toFixed(2)} SAR` 
+            : undefined,
+        });
+      }
+    },
+    onError: () => {
+      toast({ title: 'Failed to process payment', variant: 'destructive' });
+    },
+  });
+
   const getTotalPayments = (customerId: string) => {
     return payments
       .filter(p => p.customer_id === customerId)
@@ -96,6 +206,7 @@ export function usePayments(customerId?: string) {
     error,
     createPayment,
     markPaymentSent,
+    processPayment,
     getTotalPayments,
   };
 }
