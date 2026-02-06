@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useInvoices } from '@/hooks/useInvoices';
+import { usePayments } from '@/hooks/usePayments';
 import { supabase } from '@/integrations/supabase/client';
 import { Customer, ExtractedInvoiceData, Invoice } from '@/types';
 import { useToast } from '@/hooks/use-toast';
@@ -20,7 +21,8 @@ export default function Capture() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { customers } = useCustomers();
-  const { createInvoice, getCustomerBalance } = useInvoices();
+  const { invoices, createInvoice } = useInvoices();
+  const { getTotalPayments } = usePayments();
   
   const [step, setStep] = useState<Step>('customer');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -139,9 +141,28 @@ export default function Capture() {
     setCreatedInvoice(null);
   };
 
-  const totalBalance = selectedCustomer 
-    ? getCustomerBalance(selectedCustomer.id) + (createdInvoice ? Number(createdInvoice.amount) : 0)
-    : 0;
+  // Calculate net balance for a customer (total invoices - total payments)
+  const getNetBalance = (customerId: string) => {
+    const totalInvoiceAmount = invoices
+      .filter(inv => inv.customer_id === customerId)
+      .reduce((sum, inv) => sum + Number(inv.amount), 0);
+    const totalPaid = getTotalPayments(customerId);
+    return totalInvoiceAmount - totalPaid;
+  };
+
+  // For the message preview, calculate total balance including the newly created invoice
+  // Exclude the created invoice from existing invoices to avoid double-counting if it's already fetched
+  const totalBalance = selectedCustomer && createdInvoice
+    ? (() => {
+        const existingInvoiceTotal = invoices
+          .filter(inv => inv.customer_id === selectedCustomer.id && inv.id !== createdInvoice.id)
+          .reduce((sum, inv) => sum + Number(inv.amount), 0);
+        const totalPaid = getTotalPayments(selectedCustomer.id);
+        return existingInvoiceTotal + Number(createdInvoice.amount) - totalPaid;
+      })()
+    : selectedCustomer
+      ? getNetBalance(selectedCustomer.id)
+      : 0;
 
   return (
     <AppLayout title="Capture Invoice">
@@ -182,7 +203,7 @@ export default function Capture() {
               onDelete={() => {}}
               onSelect={handleCustomerSelect}
               selectable
-              getBalance={getCustomerBalance}
+              getBalance={getNetBalance}
             />
             {customers.length === 0 && (
               <Button 

@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Customer } from '@/types';
+import { Customer, Invoice } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { displayPhone } from '@/lib/phoneFormat';
-import { Search, Phone, Edit, Trash2, ChevronRight } from 'lucide-react';
+import { 
+  Search, Phone, Edit, Trash2, ChevronRight, 
+  DollarSign, Bell, FileText, MoreVertical 
+} from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,6 +18,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 interface CustomerListProps {
   customers: Customer[];
@@ -23,6 +33,9 @@ interface CustomerListProps {
   onSelect?: (customer: Customer) => void;
   selectable?: boolean;
   getBalance?: (customerId: string) => number;
+  onPayment?: (customer: Customer) => void;
+  onReminder?: (customer: Customer) => void;
+  onStatement?: (customer: Customer) => void;
 }
 
 export default function CustomerList({ 
@@ -32,12 +45,16 @@ export default function CustomerList({
   onSelect,
   selectable = false,
   getBalance,
+  onPayment,
+  onReminder,
+  onStatement,
 }: CustomerListProps) {
   const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const filtered = customers.filter(c => 
     c.name.toLowerCase().includes(search.toLowerCase()) ||
+    (c.name_ar && c.name_ar.includes(search)) ||
     c.phone.includes(search)
   );
 
@@ -61,57 +78,105 @@ export default function CustomerList({
             </CardContent>
           </Card>
         ) : (
-          filtered.map((customer) => (
-            <Card 
-              key={customer.id} 
-              className={selectable ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''}
-              onClick={() => selectable && onSelect?.(customer)}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-foreground truncate">{customer.name}</h3>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-                      <Phone className="w-3.5 h-3.5" />
-                      <span>{displayPhone(customer.phone)}</span>
+          filtered.map((customer) => {
+            const balance = getBalance?.(customer.id) || 0;
+            
+            return (
+              <Card 
+                key={customer.id} 
+                className={selectable ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''}
+                onClick={() => selectable && onSelect?.(customer)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground truncate">{customer.name}</h3>
+                      {customer.name_ar && (
+                        <p className="text-sm text-muted-foreground truncate" dir="rtl">
+                          {customer.name_ar}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+                        <Phone className="w-3.5 h-3.5" />
+                        <span>{displayPhone(customer.phone)}</span>
+                      </div>
+                      {getBalance && (
+                        <p className={`text-sm font-medium mt-1 ${balance > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                          Balance: {balance.toFixed(2)} SAR
+                        </p>
+                      )}
                     </div>
-                    {getBalance && (
-                      <p className="text-sm text-primary font-medium mt-1">
-                        Balance: {getBalance(customer.id).toFixed(2)} SAR
-                      </p>
+                    {selectable ? (
+                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        {/* Quick action buttons for customers with balance */}
+                        {balance > 0 && onPayment && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onPayment(customer);
+                            }}
+                            title="Record Payment"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                          </Button>
+                        )}
+                        
+                        {/* Dropdown for more actions */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => onEdit(customer)}>
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            {onPayment && balance > 0 && (
+                              <DropdownMenuItem onClick={() => onPayment(customer)}>
+                                <DollarSign className="w-4 h-4 mr-2" />
+                                Record Payment
+                              </DropdownMenuItem>
+                            )}
+                            {onReminder && balance > 0 && (
+                              <DropdownMenuItem onClick={() => onReminder(customer)}>
+                                <Bell className="w-4 h-4 mr-2" />
+                                Send Reminder
+                              </DropdownMenuItem>
+                            )}
+                            {onStatement && (
+                              <DropdownMenuItem onClick={() => onStatement(customer)}>
+                                <FileText className="w-4 h-4 mr-2" />
+                                Send Statement
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setDeleteId(customer.id)}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     )}
                   </div>
-                  {selectable ? (
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                  ) : (
-                    <div className="flex gap-2">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEdit(customer);
-                        }}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="text-destructive hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteId(customer.id);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </div>
 

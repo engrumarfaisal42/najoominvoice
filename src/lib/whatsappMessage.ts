@@ -3,6 +3,7 @@ import { formatSaudiPhone } from './phoneFormat';
 
 interface MessageParams {
   customerName: string;
+  customerNameAr?: string;
   invoiceDate: string;
   invoiceNumber: string;
   currentAmount: number;
@@ -14,6 +15,7 @@ interface MessageParams {
 export function generateWhatsAppMessage(params: MessageParams): string {
   const {
     customerName,
+    customerNameAr,
     invoiceDate,
     invoiceNumber,
     currentAmount,
@@ -22,10 +24,11 @@ export function generateWhatsAppMessage(params: MessageParams): string {
     language,
   } = params;
 
+  const displayName = language === 'arabic' && customerNameAr ? customerNameAr : customerName;
   const objectionDeadline = format(addDays(new Date(invoiceDate), 7), 'dd/MM/yyyy');
   
   if (language === 'arabic') {
-    return `السلام عليكم ${customerName} 👋
+    return `السلام عليكم ${displayName} 👋
 
 نود إعلامكم بتفاصيل الفاتورة الجديدة:
 
@@ -43,7 +46,7 @@ ${imageUrl}
 سوق نجوم`;
   }
 
-  return `Hello ${customerName} 👋
+  return `Hello ${displayName} 👋
 
 We would like to inform you about your new invoice:
 

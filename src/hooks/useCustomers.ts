@@ -21,7 +21,7 @@ export function useCustomers() {
   });
 
   const createCustomer = useMutation({
-    mutationFn: async (customer: { name: string; phone: string }) => {
+    mutationFn: async (customer: { name: string; name_ar?: string; phone: string }) => {
       const { data, error } = await supabase
         .from('customers')
         .insert(customer)
