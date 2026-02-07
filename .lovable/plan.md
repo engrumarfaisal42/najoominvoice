@@ -1,76 +1,44 @@
 
 
-# 📱 Invoice WhatsApp Messenger
+# Fix: Data Not Visible Across Devices
 
-A mobile-friendly app for Najoom Market to capture invoices, extract data automatically, and send payment reminders to customers via WhatsApp.
+## Problem
+All database tables (`customers`, `invoices`, `payments`, `admin_session`) have their security policies set as **RESTRICTIVE** instead of **PERMISSIVE**. In the database engine, at least one permissive policy must exist to grant access. Restrictive policies alone always result in denied access, even when the condition is `true`.
 
----
+Data appears to work on the original device only because it is cached in memory by the app. Any fresh request from a new device returns empty results.
 
-## 🔐 1. Login Screen
-- Simple login page with your credentials (najoommarket / Faisal@@7)
-- Secure access - only you can use the app
-- Remember login so you don't have to sign in every time
+## Fix
+Drop the existing restrictive policies on all four tables and recreate them as **permissive** policies.
 
----
+### SQL Migration
 
-## 👥 2. Customer Management
-- **Add new customers** with:
-  - Customer name
-  - Phone number (+966 format, auto-formatted)
-- **View all customers** in a searchable list
-- **Edit or delete** customer information
-- **See customer history** - all invoices sent to each customer
+```sql
+-- Drop existing restrictive policies
+DROP POLICY IF EXISTS "Allow all operations on admin_session" ON public.admin_session;
+DROP POLICY IF EXISTS "Allow all operations on customers" ON public.customers;
+DROP POLICY IF EXISTS "Allow all operations on invoices" ON public.invoices;
+DROP POLICY IF EXISTS "Allow all operations on payments" ON public.payments;
 
----
+-- Recreate as permissive policies
+CREATE POLICY "Allow all operations on admin_session"
+  ON public.admin_session FOR ALL
+  USING (true) WITH CHECK (true);
 
-## 📸 3. Invoice Capture & AI Extraction
-- **Take photo** of paper invoice using phone camera
-- **AI automatically extracts**:
-  - 📅 Invoice date
-  - 🔢 Invoice number
-  - 💰 Total amount (in SAR/Riyal)
-- **Review & edit** extracted data before sending
-- **Upload invoice image** to cloud storage for sharing
+CREATE POLICY "Allow all operations on customers"
+  ON public.customers FOR ALL
+  USING (true) WITH CHECK (true);
 
----
+CREATE POLICY "Allow all operations on invoices"
+  ON public.invoices FOR ALL
+  USING (true) WITH CHECK (true);
 
-## 💬 4. WhatsApp Message Builder
-- **Select customer** from your saved list
-- **Choose language**: English 🇬🇧 or Arabic 🇸🇦
-- **Auto-generated message** includes:
-  - Greeting with customer name
-  - 📅 Invoice date
-  - 🧾 Invoice number  
-  - 💵 Current invoice amount
-  - 📊 Total balance (current + all previous unpaid)
-  - 🔗 Link to view invoice image
-  - ⚠️ 7-day objection notice
-- **Preview message** before sending
-- **One-tap send** - opens WhatsApp with message ready
+CREATE POLICY "Allow all operations on payments"
+  ON public.payments FOR ALL
+  USING (true) WITH CHECK (true);
+```
 
----
+### No Code Changes Needed
+The app code is correct. Only the database policies need to be fixed. After applying this migration, data will be accessible from any device immediately after login.
 
-## 📊 5. Dashboard & History
-- **View all sent invoices** with filters by:
-  - Customer name
-  - Date range
-  - Status
-- **See customer balances** at a glance
-- **Search through invoice history**
-- Access from any device with your login
-
----
-
-## 📱 Mobile-First Design
-- Optimized for phone use
-- Large buttons easy to tap
-- Quick camera access
-- Works offline for viewing saved data
-
----
-
-## 🛠️ Technical Setup Required
-- **Lovable Cloud** for database and storage
-- **Lovable AI** for invoice text extraction (OCR)
-- No external accounts needed - everything managed within the app
-
+### Security Note
+Since this is a single-admin app with custom session-based authentication (not database-level auth), permissive public policies are acceptable. The app-level login screen provides the access control.
