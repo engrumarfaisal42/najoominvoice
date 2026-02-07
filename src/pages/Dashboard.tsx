@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useInvoices } from '@/hooks/useInvoices';
 import { useCustomerBalance } from '@/hooks/useCustomerBalance';
+import { useBackup } from '@/hooks/useBackup';
 import { 
   Camera, 
   Users, 
@@ -12,7 +13,8 @@ import {
   TrendingUp,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -20,6 +22,7 @@ export default function Dashboard() {
   const { customers } = useCustomers();
   const { invoices } = useInvoices();
   const { totalOutstanding } = useCustomerBalance();
+  const { downloadBackup, isLoading: isBackingUp } = useBackup();
 
   const stats = {
     totalCustomers: customers.length,
@@ -124,6 +127,17 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Backup Button */}
+        <Button
+          onClick={downloadBackup}
+          disabled={isBackingUp}
+          variant="outline"
+          className="w-full h-12"
+        >
+          <Download className="w-5 h-5 mr-2" />
+          {isBackingUp ? 'Preparing Backup...' : 'Backup Data'}
+        </Button>
 
         {/* Recent Invoices */}
         {recentInvoices.length > 0 && (
