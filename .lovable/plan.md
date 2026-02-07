@@ -1,44 +1,43 @@
 
 
-# Fix: Data Not Visible Across Devices
+# Add Data Backup/Export Feature
 
-## Problem
-All database tables (`customers`, `invoices`, `payments`, `admin_session`) have their security policies set as **RESTRICTIVE** instead of **PERMISSIVE**. In the database engine, at least one permissive policy must exist to grant access. Restrictive policies alone always result in denied access, even when the condition is `true`.
+## What This Does
+Adds a "Backup Data" button on the Dashboard that exports all your app data (customers, invoices, payments) as a JSON file downloaded to your device. This gives you a local copy of everything for safekeeping.
 
-Data appears to work on the original device only because it is cached in memory by the app. Any fresh request from a new device returns empty results.
+## Where It Appears
+- A new "Backup Data" button on the Dashboard page, below the existing stats section
+- Tapping it will instantly download a `.json` file named with the current date (e.g., `najoom-backup-2026-02-07.json`)
 
-## Fix
-Drop the existing restrictive policies on all four tables and recreate them as **permissive** policies.
+## What Gets Backed Up
+- All customers (names, phone numbers, credit balances)
+- All invoices (numbers, dates, amounts, statuses)
+- All payments (amounts, dates, notes)
+- Backup timestamp for reference
 
-### SQL Migration
+---
 
-```sql
--- Drop existing restrictive policies
-DROP POLICY IF EXISTS "Allow all operations on admin_session" ON public.admin_session;
-DROP POLICY IF EXISTS "Allow all operations on customers" ON public.customers;
-DROP POLICY IF EXISTS "Allow all operations on invoices" ON public.invoices;
-DROP POLICY IF EXISTS "Allow all operations on payments" ON public.payments;
+## Technical Details
 
--- Recreate as permissive policies
-CREATE POLICY "Allow all operations on admin_session"
-  ON public.admin_session FOR ALL
-  USING (true) WITH CHECK (true);
+### New File: `src/hooks/useBackup.ts`
+- Fetches all data from `customers`, `invoices`, and `payments` tables
+- Packages into a JSON object with a timestamp
+- Creates a downloadable file using the browser's Blob API and triggers a download
 
-CREATE POLICY "Allow all operations on customers"
-  ON public.customers FOR ALL
-  USING (true) WITH CHECK (true);
+### Modified File: `src/pages/Dashboard.tsx`
+- Import and use the `useBackup` hook
+- Add a "Backup Data" button (with a Download icon) in the dashboard, placed after the outstanding balance card
+- Show a loading state while the backup is being prepared
+- Show a success toast when the backup completes
 
-CREATE POLICY "Allow all operations on invoices"
-  ON public.invoices FOR ALL
-  USING (true) WITH CHECK (true);
-
-CREATE POLICY "Allow all operations on payments"
-  ON public.payments FOR ALL
-  USING (true) WITH CHECK (true);
+### Data Format
+```json
+{
+  "backup_date": "2026-02-07T12:00:00Z",
+  "customers": [...],
+  "invoices": [...],
+  "payments": [...]
+}
 ```
 
-### No Code Changes Needed
-The app code is correct. Only the database policies need to be fixed. After applying this migration, data will be accessible from any device immediately after login.
-
-### Security Note
-Since this is a single-admin app with custom session-based authentication (not database-level auth), permissive public policies are acceptable. The app-level login screen provides the access control.
+No database changes needed. This is purely a frontend feature using existing data.
