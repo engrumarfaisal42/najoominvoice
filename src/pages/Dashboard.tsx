@@ -6,6 +6,8 @@ import { useCustomers } from '@/hooks/useCustomers';
 import { useInvoices } from '@/hooks/useInvoices';
 import { useCustomerBalance } from '@/hooks/useCustomerBalance';
 import { useBackup } from '@/hooks/useBackup';
+import RestoreDialog from '@/components/backup/RestoreDialog';
+import { useState } from 'react';
 import { 
   Camera, 
   Users, 
@@ -14,7 +16,8 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  Download
+  Download,
+  Upload
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -23,6 +26,7 @@ export default function Dashboard() {
   const { invoices } = useInvoices();
   const { totalOutstanding } = useCustomerBalance();
   const { downloadBackup, isLoading: isBackingUp } = useBackup();
+  const [restoreOpen, setRestoreOpen] = useState(false);
 
   const stats = {
     totalCustomers: customers.length,
@@ -128,16 +132,28 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Backup Button */}
-        <Button
-          onClick={downloadBackup}
-          disabled={isBackingUp}
-          variant="outline"
-          className="w-full h-12"
-        >
-          <Download className="w-5 h-5 mr-2" />
-          {isBackingUp ? 'Preparing Backup...' : 'Backup Data'}
-        </Button>
+        {/* Backup & Restore Buttons */}
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            onClick={downloadBackup}
+            disabled={isBackingUp}
+            variant="outline"
+            className="h-12"
+          >
+            <Download className="w-5 h-5 mr-2" />
+            {isBackingUp ? 'Backing up...' : 'Backup'}
+          </Button>
+          <Button
+            onClick={() => setRestoreOpen(true)}
+            variant="outline"
+            className="h-12"
+          >
+            <Upload className="w-5 h-5 mr-2" />
+            Restore
+          </Button>
+        </div>
+
+        <RestoreDialog open={restoreOpen} onOpenChange={setRestoreOpen} />
 
         {/* Recent Invoices */}
         {recentInvoices.length > 0 && (
