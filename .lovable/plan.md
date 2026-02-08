@@ -1,43 +1,36 @@
 
 
-# Add Data Backup/Export Feature
+# Fix Database Access Policies
 
-## What This Does
-Adds a "Backup Data" button on the Dashboard that exports all your app data (customers, invoices, payments) as a JSON file downloaded to your device. This gives you a local copy of everything for safekeeping.
+## The Problem
+All four tables (`admin_session`, `customers`, `invoices`, `payments`) have their security policies set as **RESTRICTIVE** instead of **PERMISSIVE**. In PostgreSQL, restrictive policies alone grant zero access — they only narrow down existing permissions. Without a permissive policy, no data can be read or written, which is why:
+- Login fails (can't save session token)
+- No data shows on any device after login
 
-## Where It Appears
-- A new "Backup Data" button on the Dashboard page, below the existing stats section
-- Tapping it will instantly download a `.json` file named with the current date (e.g., `najoom-backup-2026-02-07.json`)
-
-## What Gets Backed Up
-- All customers (names, phone numbers, credit balances)
-- All invoices (numbers, dates, amounts, statuses)
-- All payments (amounts, dates, notes)
-- Backup timestamp for reference
-
----
+## The Fix
+Drop the existing restrictive policies and replace them with permissive ones on all four tables.
 
 ## Technical Details
 
-### New File: `src/hooks/useBackup.ts`
-- Fetches all data from `customers`, `invoices`, and `payments` tables
-- Packages into a JSON object with a timestamp
-- Creates a downloadable file using the browser's Blob API and triggers a download
+### Database Migration (SQL)
+Drop and recreate the policies for all four tables:
 
-### Modified File: `src/pages/Dashboard.tsx`
-- Import and use the `useBackup` hook
-- Add a "Backup Data" button (with a Download icon) in the dashboard, placed after the outstanding balance card
-- Show a loading state while the backup is being prepared
-- Show a success toast when the backup completes
+```text
+-- admin_session
+DROP POLICY IF EXISTS "Allow all operations on admin_session" ON public.admin_session;
+CREATE POLICY "Allow all operations on admin_session" ON public.admin_session FOR ALL USING (true) WITH CHECK (true);
 
-### Data Format
-```json
-{
-  "backup_date": "2026-02-07T12:00:00Z",
-  "customers": [...],
-  "invoices": [...],
-  "payments": [...]
-}
+-- customers
+DROP POLICY IF EXISTS "Allow all operations on customers" ON public.customers;
+CREATE POLICY "Allow all operations on customers" ON public.customers FOR ALL USING (true) WITH CHECK (true);
+
+-- invoices
+DROP POLICY IF EXISTS "Allow all operations on invoices" ON public.invoices;
+CREATE POLICY "Allow all operations on invoices" ON public.invoices FOR ALL USING (true) WITH CHECK (true);
+
+-- payments
+DROP POLICY IF EXISTS "Allow all operations on payments" ON public.payments;
+CREATE POLICY "Allow all operations on payments" ON public.payments FOR ALL USING (true) WITH CHECK (true);
 ```
 
-No database changes needed. This is purely a frontend feature using existing data.
+No code changes needed. This is a database-only fix. After applying, the app will work on all devices immediately.
