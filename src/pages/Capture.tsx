@@ -257,20 +257,35 @@ export default function Capture() {
               <p className="text-muted-foreground mb-6">
                 The invoice has been sent to {selectedCustomer?.name} via WhatsApp
               </p>
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3">
                 <Button
-                  variant="outline"
-                  onClick={() => navigate('/history')}
-                  className="flex-1 h-12"
+                  onClick={() => {
+                    setExtractedData(null);
+                    setCapturedImage(null);
+                    setImageUrl('');
+                    setCreatedInvoice(null);
+                    setStep('capture');
+                  }}
+                  className="w-full h-12"
                 >
-                  View History
+                  Add Another Invoice (Same Customer)
                 </Button>
-                <Button
-                  onClick={handleNewInvoice}
-                  className="flex-1 h-12"
-                >
-                  New Invoice
-                </Button>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate('/history')}
+                    className="flex-1 h-12"
+                  >
+                    View History
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleNewInvoice}
+                    className="flex-1 h-12"
+                  >
+                    New Customer Invoice
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

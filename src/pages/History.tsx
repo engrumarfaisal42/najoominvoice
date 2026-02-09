@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -13,7 +14,8 @@ import {
 } from '@/components/ui/select';
 import { useInvoices } from '@/hooks/useInvoices';
 import { format } from 'date-fns';
-import { Search, Calendar, DollarSign, FileText, ExternalLink, Filter } from 'lucide-react';
+import { Search, Calendar, DollarSign, FileText, ExternalLink, Filter, CheckSquare, X, Send } from 'lucide-react';
+import BatchSendDialog from '@/components/invoice/BatchSendDialog';
 
 const statusColors = {
   pending: 'bg-warning/10 text-warning border-warning/20',
@@ -26,6 +28,9 @@ export default function History() {
   const { invoices, isLoading, updateInvoice } = useInvoices();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchSendOpen, setBatchSendOpen] = useState(false);
 
   const filtered = invoices.filter(inv => {
     const matchesSearch = 
@@ -42,9 +47,25 @@ export default function History() {
     });
   };
 
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const selectedInvoices = invoices.filter(inv => selectedIds.has(inv.id));
+
   return (
     <AppLayout title="Invoice History">
-      <div className="space-y-4">
+      <div className="space-y-4 pb-20">
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -68,6 +89,14 @@ export default function History() {
               <SelectItem value="objected">Objected</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            variant={selectionMode ? 'destructive' : 'outline'}
+            size="icon"
+            className="h-12 w-12 shrink-0"
+            onClick={selectionMode ? exitSelectionMode : () => setSelectionMode(true)}
+          >
+            {selectionMode ? <X className="w-5 h-5" /> : <CheckSquare className="w-5 h-5" />}
+          </Button>
         </div>
 
         {isLoading ? (
@@ -81,37 +110,61 @@ export default function History() {
         ) : (
           <div className="space-y-3">
             {filtered.map((invoice) => (
-              <Card key={invoice.id}>
+              <Card
+                key={invoice.id}
+                className={selectionMode && selectedIds.has(invoice.id) ? 'ring-2 ring-primary' : ''}
+                onClick={selectionMode ? () => toggleSelection(invoice.id) : undefined}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="font-semibold text-foreground">
-                        {invoice.customer?.name || 'Unknown Customer'}
-                      </h3>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>{invoice.invoice_number}</span>
+                    <div className="flex items-start gap-3">
+                      {selectionMode && (
+                        <Checkbox
+                          checked={selectedIds.has(invoice.id)}
+                          onCheckedChange={() => toggleSelection(invoice.id)}
+                          className="mt-1"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      )}
+                      <div>
+                        <h3 className="font-semibold text-foreground">
+                          {invoice.customer?.name || 'Unknown Customer'}
+                        </h3>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>{invoice.invoice_number}</span>
+                        </div>
                       </div>
                     </div>
-                    <Select 
-                      value={invoice.status} 
-                      onValueChange={(value) => handleStatusChange(invoice.id, value)}
-                    >
-                      <SelectTrigger className="w-auto h-8 px-2">
-                        <Badge 
-                          variant="outline" 
-                          className={statusColors[invoice.status]}
-                        >
-                          {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                        </Badge>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="sent">Sent</SelectItem>
-                        <SelectItem value="paid">Paid</SelectItem>
-                        <SelectItem value="objected">Objected</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {!selectionMode && (
+                      <Select 
+                        value={invoice.status} 
+                        onValueChange={(value) => handleStatusChange(invoice.id, value)}
+                      >
+                        <SelectTrigger className="w-auto h-8 px-2">
+                          <Badge 
+                            variant="outline" 
+                            className={statusColors[invoice.status]}
+                          >
+                            {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                          </Badge>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="sent">Sent</SelectItem>
+                          <SelectItem value="paid">Paid</SelectItem>
+                          <SelectItem value="objected">Objected</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {selectionMode && (
+                      <Badge 
+                        variant="outline" 
+                        className={statusColors[invoice.status]}
+                      >
+                        {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                      </Badge>
+                    )}
                   </div>
                   
                   <div className="flex items-center justify-between text-sm">
@@ -125,7 +178,7 @@ export default function History() {
                         {Number(invoice.amount).toFixed(2)} SAR
                       </span>
                     </div>
-                    {invoice.image_url && (
+                    {invoice.image_url && !selectionMode && (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -147,6 +200,31 @@ export default function History() {
             ))}
           </div>
         )}
+
+        {/* Selection bottom bar */}
+        {selectionMode && selectedIds.size > 0 && (
+          <div className="fixed bottom-20 left-0 right-0 bg-background border-t p-4 flex items-center justify-between z-50">
+            <span className="text-sm font-medium">
+              {selectedIds.size} invoice(s) selected
+            </span>
+            <Button
+              onClick={() => setBatchSendOpen(true)}
+              className="h-10 bg-[hsl(142,70%,49%)] hover:bg-[hsl(142,70%,45%)]"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Send via WhatsApp
+            </Button>
+          </div>
+        )}
+
+        <BatchSendDialog
+          open={batchSendOpen}
+          onOpenChange={(open) => {
+            setBatchSendOpen(open);
+            if (!open) exitSelectionMode();
+          }}
+          selectedInvoices={selectedInvoices}
+        />
       </div>
     </AppLayout>
   );
