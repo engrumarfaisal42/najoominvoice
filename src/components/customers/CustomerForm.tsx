@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Customer } from '@/types';
 import { displayPhone, validateSaudiPhone, formatSaudiPhone } from '@/lib/phoneFormat';
 import { transliterateToArabic } from '@/lib/transliterate';
-import { UserPlus, Save, Languages } from 'lucide-react';
+import { UserPlus, Save, Languages, ContactRound } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface CustomerFormProps {
   customer?: Customer;
@@ -16,10 +17,38 @@ interface CustomerFormProps {
 }
 
 export default function CustomerForm({ customer, onSubmit, onCancel, isLoading }: CustomerFormProps) {
+  const { toast } = useToast();
   const [name, setName] = useState(customer?.name || '');
   const [nameAr, setNameAr] = useState(customer?.name_ar || '');
   const [phone, setPhone] = useState(customer?.phone || '');
   const [phoneError, setPhoneError] = useState('');
+  const [contactsSupported, setContactsSupported] = useState(false);
+
+  useEffect(() => {
+    setContactsSupported('contacts' in navigator && 'ContactsManager' in window);
+  }, []);
+
+  const pickContact = async () => {
+    try {
+      const contacts = await (navigator as any).contacts.select(
+        ['name', 'tel'],
+        { multiple: false }
+      );
+      if (contacts?.length > 0) {
+        const contact = contacts[0];
+        if (contact.name?.[0]) setName(contact.name[0]);
+        if (contact.tel?.[0]) {
+          const tel = contact.tel[0].replace(/[\s\-()]/g, '');
+          setPhone(tel);
+          handlePhoneChange(tel);
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'TypeError') {
+        toast({ title: 'Could not access contacts', variant: 'destructive' });
+      }
+    }
+  };
 
   // Auto-transliterate English name to Arabic
   useEffect(() => {
@@ -61,6 +90,18 @@ export default function CustomerForm({ customer, onSubmit, onCancel, isLoading }
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {contactsSupported && !customer && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={pickContact}
+              className="w-full h-12"
+            >
+              <ContactRound className="w-5 h-5 mr-2" />
+              Pick from Contacts
+            </Button>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="name">Customer Name (English)</Label>
             <Input
