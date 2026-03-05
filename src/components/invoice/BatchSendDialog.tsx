@@ -174,10 +174,9 @@ export default function BatchSendDialog({ open, onOpenChange, selectedInvoices }
               <Button
                 onClick={handleSend}
                 className="flex-1 h-12 bg-[hsl(142,70%,49%)] hover:bg-[hsl(142,70%,45%)]"
-                disabled={sentIds.has(current.id)}
               >
                 <Send className="w-4 h-4 mr-2" />
-                {sentIds.has(current.id) ? 'Sent' : 'Send'}
+                {sentIds.has(current.id) ? 'Send Again' : 'Send'}
               </Button>
             </div>
 

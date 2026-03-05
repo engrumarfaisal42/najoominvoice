@@ -25,11 +25,10 @@ export function useCustomerBalance(customerId?: string) {
 
       const totalInvoices = customerInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
       const totalPayments = customerPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-      const creditBalance = Number(customer?.credit_balance ?? 0);
+      const creditBalance = Math.abs(Number(customer?.credit_balance ?? 0)) < 0.01 ? 0 : Number(customer?.credit_balance ?? 0);
       
-      // Net balance = invoices - payments - credit
-      // Positive means customer owes money, negative means overpaid
-      const netBalance = totalInvoices - totalPayments - creditBalance;
+      // Net balance = invoices - payments (credit shown separately, not subtracted)
+      const netBalance = totalInvoices - totalPayments;
       const unpaidInvoiceCount = customerInvoices.filter(inv => inv.status !== 'paid').length;
 
       return {
@@ -54,8 +53,7 @@ export function useCustomerBalance(customerId?: string) {
   const totalOutstanding = useMemo(() => {
     const totalInvoiceAmount = invoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
     const totalPaymentAmount = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-    const totalCredit = customers.reduce((sum, c) => sum + Number(c.credit_balance ?? 0), 0);
-    return Math.max(0, totalInvoiceAmount - totalPaymentAmount - totalCredit);
+    return Math.max(0, totalInvoiceAmount - totalPaymentAmount);
   }, [invoices, payments, customers]);
 
   // Get all customers with outstanding balance

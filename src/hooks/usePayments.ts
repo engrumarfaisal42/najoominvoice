@@ -150,25 +150,17 @@ export function usePayments(customerId?: string) {
             .reduce((sum, inv) => sum + Number(inv.amount), 0)
         : 0;
       
-      const newCredit = paymentAmount + currentCredit - totalPaidInvoices;
+      // Round to 2 decimals and clamp near-zero
+      const rawCredit = paymentAmount + currentCredit - totalPaidInvoices;
+      const newCredit = Math.abs(rawCredit) < 0.01 ? 0 : Math.round(rawCredit * 100) / 100;
       
-      // Update customer credit balance if there's overpayment
-      if (newCredit > 0) {
-        const { error: creditError } = await supabase
-          .from('customers')
-          .update({ credit_balance: newCredit })
-          .eq('id', customerId);
-        
-        if (creditError) throw creditError;
-      } else {
-        // Reset credit to 0 if fully used
-        const { error: creditError } = await supabase
-          .from('customers')
-          .update({ credit_balance: 0 })
-          .eq('id', customerId);
-        
-        if (creditError) throw creditError;
-      }
+      // Update customer credit balance
+      const { error: creditError } = await supabase
+        .from('customers')
+        .update({ credit_balance: Math.max(0, newCredit) })
+        .eq('id', customerId);
+      
+      if (creditError) throw creditError;
 
       return {
         invoicesPaid: invoicesToPay.length,
