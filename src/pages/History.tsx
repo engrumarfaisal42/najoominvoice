@@ -31,6 +31,7 @@ export default function History() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchSendOpen, setBatchSendOpen] = useState(false);
+  const [resendInvoice, setResendInvoice] = useState<typeof invoices[0] | null>(null);
 
   const filtered = invoices.filter(inv => {
     const matchesSearch = 
@@ -178,14 +179,26 @@ export default function History() {
                         {Number(invoice.amount).toFixed(2)} SAR
                       </span>
                     </div>
-                    {invoice.image_url && !selectionMode && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => window.open(invoice.image_url!, '_blank')}
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </Button>
+                    {!selectionMode && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setResendInvoice(invoice)}
+                          title="Resend via WhatsApp"
+                        >
+                          <Send className="w-4 h-4" />
+                        </Button>
+                        {invoice.image_url && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => window.open(invoice.image_url!, '_blank')}
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -225,6 +238,16 @@ export default function History() {
           }}
           selectedInvoices={selectedInvoices}
         />
+
+        {resendInvoice && (
+          <BatchSendDialog
+            open={!!resendInvoice}
+            onOpenChange={(open) => {
+              if (!open) setResendInvoice(null);
+            }}
+            selectedInvoices={[resendInvoice]}
+          />
+        )}
       </div>
     </AppLayout>
   );
