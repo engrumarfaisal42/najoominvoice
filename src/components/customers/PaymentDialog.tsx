@@ -14,7 +14,7 @@ import { Customer } from '@/types';
 import { usePayments } from '@/hooks/usePayments';
 import { generatePaymentReceivedMessage, createWhatsAppUrl } from '@/lib/messageTemplates';
 import { format } from 'date-fns';
-import { DollarSign, Calendar, FileText, Send, Copy, Check, CreditCard } from 'lucide-react';
+import { DollarSign, Calendar, FileText, Send, Copy, Check, CreditCard, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface PaymentDialogProps {
@@ -41,11 +41,12 @@ export default function PaymentDialog({
   const [step, setStep] = useState<'form' | 'preview'>('form');
   const [createdPaymentId, setCreatedPaymentId] = useState<string | null>(null);
   const [creditAfterPayment, setCreditAfterPayment] = useState(0);
+  const [hasSent, setHasSent] = useState(false);
 
   const paymentAmount = parseFloat(amount) || 0;
-  const customerCredit = Number(customer.credit_balance ?? 0);
-  const effectiveBalance = currentBalance - customerCredit;
-  const remainingBalance = effectiveBalance - paymentAmount;
+  const customerCredit = Math.abs(Number(customer.credit_balance ?? 0)) < 0.01 ? 0 : Number(customer.credit_balance ?? 0);
+  // currentBalance is already total_invoices - total_payments, don't subtract credit again
+  const remainingBalance = currentBalance - paymentAmount;
   const willCreateCredit = remainingBalance < 0;
 
   const message = generatePaymentReceivedMessage({
@@ -57,11 +58,23 @@ export default function PaymentDialog({
     language,
   });
 
+  const handleUseFullDue = () => {
+    if (currentBalance > 0) {
+      setAmount(currentBalance.toFixed(2));
+    } else {
+      toast({ title: 'No outstanding balance', description: 'This customer has no dues to clear.' });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (paymentAmount <= 0) {
+      toast({ title: 'Invalid amount', description: 'Please enter a positive payment amount.', variant: 'destructive' });
+      return;
+    }
+
     try {
-      // Create the payment record
       const result = await createPayment.mutateAsync({
         customer_id: customer.id,
         amount: paymentAmount,
@@ -70,7 +83,6 @@ export default function PaymentDialog({
         language,
       });
       
-      // Process the payment - auto-mark invoices and handle credit
       const processResult = await processPayment.mutateAsync({
         customerId: customer.id,
         paymentAmount: paymentAmount,
@@ -88,11 +100,12 @@ export default function PaymentDialog({
     const url = createWhatsAppUrl(customer.phone, message);
     window.open(url, '_blank');
     
-    if (createdPaymentId) {
+    // Only mark as sent once
+    if (createdPaymentId && !hasSent) {
       await markPaymentSent.mutateAsync({ id: createdPaymentId, language });
+      setHasSent(true);
     }
-    
-    handleClose();
+    // Dialog stays open for retry
   };
 
   const handleCopy = async () => {
@@ -109,6 +122,7 @@ export default function PaymentDialog({
     setStep('form');
     setCreatedPaymentId(null);
     setCreditAfterPayment(0);
+    setHasSent(false);
     onOpenChange(false);
   };
 
@@ -127,21 +141,15 @@ export default function PaymentDialog({
               <p className="text-sm text-muted-foreground">Customer</p>
               <p className="font-medium">{customer.name}</p>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Current Balance:</span>
-                <span className="text-foreground font-medium">{currentBalance.toFixed(2)} SAR</span>
+                <span className="text-muted-foreground">Outstanding Due:</span>
+                <span className="text-foreground font-medium">{Math.max(0, currentBalance).toFixed(2)} SAR</span>
               </div>
               {customerCredit > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground flex items-center gap-1">
-                    <CreditCard className="w-3 h-3" /> Credit Available:
+                    <CreditCard className="w-3 h-3" /> Unallocated Credit:
                   </span>
-                  <span className="text-success font-medium">-{customerCredit.toFixed(2)} SAR</span>
-                </div>
-              )}
-              {customerCredit > 0 && (
-                <div className="flex justify-between text-sm border-t pt-1 mt-1">
-                  <span className="text-muted-foreground">Effective Due:</span>
-                  <span className="text-foreground font-medium">{effectiveBalance.toFixed(2)} SAR</span>
+                  <span className="text-primary font-medium">{customerCredit.toFixed(2)} SAR</span>
                 </div>
               )}
             </div>
@@ -151,25 +159,37 @@ export default function PaymentDialog({
                 <DollarSign className="w-4 h-4" />
                 Amount Received (SAR)
               </Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                min="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                className="h-12"
-                required
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="h-12 flex-1"
+                  required
+                />
+                {currentBalance > 0 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleUseFullDue}
+                    className="h-12 whitespace-nowrap text-xs"
+                  >
+                    Use Full Due
+                  </Button>
+                )}
+              </div>
               {amount && (
                 <div className="text-sm space-y-1">
                   {willCreateCredit ? (
-                    <p className="text-success">
+                    <p className="text-primary">
                       ✅ Full payment + <span className="font-medium">{Math.abs(remainingBalance).toFixed(2)} SAR credit</span> for future use
                     </p>
                   ) : remainingBalance === 0 ? (
-                    <p className="text-success">✅ This will clear the entire balance</p>
+                    <p className="text-primary">✅ This will clear the entire balance</p>
                   ) : (
                     <p className="text-muted-foreground">
                       Remaining after payment: <span className="text-foreground">{remainingBalance.toFixed(2)} SAR</span>
@@ -211,7 +231,7 @@ export default function PaymentDialog({
             <Button 
               type="submit" 
               className="w-full h-12"
-              disabled={createPayment.isPending || processPayment.isPending || !amount}
+              disabled={createPayment.isPending || processPayment.isPending || !amount || paymentAmount <= 0}
             >
               {createPayment.isPending || processPayment.isPending ? 'Recording...' : 'Record Payment & Preview Message'}
             </Button>
@@ -219,8 +239,8 @@ export default function PaymentDialog({
         ) : (
           <div className="space-y-4">
             {creditAfterPayment > 0 && (
-              <div className="bg-success/10 border border-success/20 p-3 rounded-lg">
-                <p className="text-sm text-success flex items-center gap-2">
+              <div className="bg-primary/10 border border-primary/20 p-3 rounded-lg">
+                <p className="text-sm text-primary flex items-center gap-2">
                   <CreditCard className="w-4 h-4" />
                   <span className="font-medium">{creditAfterPayment.toFixed(2)} SAR</span> credit added to account
                 </p>
@@ -263,10 +283,21 @@ export default function PaymentDialog({
                 onClick={handleSend}
                 className="flex-1 h-12 bg-[hsl(142,70%,49%)] hover:bg-[hsl(142,70%,45%)]"
               >
-                <Send className="w-4 h-4 mr-2" />
-                Send via WhatsApp
+                {hasSent ? (
+                  <><RefreshCw className="w-4 h-4 mr-2" />Send Again</>
+                ) : (
+                  <><Send className="w-4 h-4 mr-2" />Send via WhatsApp</>
+                )}
               </Button>
             </div>
+
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              className="w-full h-12"
+            >
+              Done
+            </Button>
           </div>
         )}
       </DialogContent>
