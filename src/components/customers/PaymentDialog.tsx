@@ -14,7 +14,7 @@ import { Customer } from '@/types';
 import { usePayments } from '@/hooks/usePayments';
 import { generatePaymentReceivedMessage, createWhatsAppUrl } from '@/lib/messageTemplates';
 import { format } from 'date-fns';
-import { DollarSign, Calendar, FileText, Send, Copy, Check, CreditCard, RefreshCw } from 'lucide-react';
+import { DollarSign, Calendar, FileText, Send, Copy, Check, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface PaymentDialogProps {
