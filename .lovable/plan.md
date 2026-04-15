@@ -1,73 +1,72 @@
 
-Goal: enhance payment flow so you can (1) clear full due correctly, (2) resend WhatsApp if first send fails, and (3) stop confusing tiny credit leftovers.
+Goal: fix customer ledger logic so credit is automatically consumed by new invoices and the UI never shows misleading “credit + due” at the same time.
 
-1) Root-cause fixes for wrong due/credit behavior
-- Problem found:
-  - `PaymentDialog` subtracts `credit_balance` twice (`currentBalance - customerCredit`), which can understate due.
-  - Balance logic is inconsistent across files (`Customers.tsx`, `Capture.tsx`, `useCustomerBalance.ts`).
-  - Floating-point math in `usePayments.processPayment` creates tiny credits like `0.000000000000012`.
-- Implementation plan:
-  - Standardize due formula everywhere as:  
-    `due = max(0, total_invoices - total_payments)`  
-    (credit is shown separately as informational/unallocated amount, not subtracted again).
-  - Update:
-    - `src/components/customers/PaymentDialog.tsx`
-    - `src/pages/Customers.tsx`
-    - `src/pages/Capture.tsx`
-    - `src/hooks/useCustomerBalance.ts`
-  - Add money normalization (round to 2 decimals + near-zero clamp) in payment processing:
-    - `src/hooks/usePayments.ts`  
-    so credits/due are stable and not noisy.
+What I found
+- The current UI mostly uses `due = total invoices - total payments`, which is okay for display.
+- The real problem is backend logic in `src/hooks/usePayments.ts`:
+  - `processPayment` only marks an invoice as paid if the full invoice amount is covered.
+  - If a customer pays part of a large invoice, the leftover payment is incorrectly stored as `credit_balance`.
+  - That creates the wrong state: customer still has due, but also shows credit.
+- Another missing piece: when a new invoice is created, existing customer credit is not automatically applied to that new invoice, even though you want available credit to be used immediately.
 
-2) “Clear all due balance” action in payment section
-- In `PaymentDialog`, add a clear helper action:
-  - Button: “Use Full Due Amount”
-  - Auto-fills payment amount with exact due.
-  - Keep user editable after autofill.
-- Improve validation:
-  - Reject zero/negative payment submissions.
-  - Show clear feedback if due already zero.
-- Result:
-  - One tap to clear customer dues accurately.
+Implementation plan
 
-3) WhatsApp resend if first send fails
-- Payment receipt resend (payment section):
-  - In `PaymentDialog` preview step:
-    - Do not auto-close immediately after send.
-    - Keep dialog open with buttons:
-      - “Send via WhatsApp” (first time)
-      - “Send Again” (retry)
-      - “Done” (close manually)
-    - Mark payment as sent once, but still allow retries.
-- Invoice batch resend:
-  - In `src/components/invoice/BatchSendDialog.tsx`, allow repeated send attempts before moving next (remove strict one-send disable behavior).
+1) Fix payment allocation logic
+- Update `src/hooks/usePayments.ts` so customer credit is based on overall account math, not only fully paid invoices.
+- New rule:
+  - `netAccount = totalPaymentsIncludingNew + existingCredit - totalInvoices`
+  - if `netAccount > 0`, store it as credit
+  - otherwise store credit as `0`
+- Keep invoice status updates, but do not treat partial payments as customer credit.
 
-4) Data cleanup for already corrupted tiny credits
-- One-time backend data correction (data operation, no schema change):
-  - Set very small residual credits to zero (for example absolute value < 0.01).
-- This immediately fixes customers like Ali Alnahdi showing phantom credit after settlement.
+2) Auto-use existing credit when a new invoice is created
+- Update `src/pages/Capture.tsx` after invoice creation:
+  - check customer’s current `credit_balance`
+  - if credit fully covers the new invoice, mark invoice as paid and reduce credit
+  - if credit partially covers it, reduce credit to zero and keep invoice pending/sent as appropriate
+- This matches your expected behavior: available credit gets used whenever a new invoice is added to that customer.
 
-5) QA plan (end-to-end)
-- Customer with due (Ali Alnahdi):
-  - Open payment dialog → tap “Use Full Due Amount” → save.
-  - Expected: due becomes 0.00, no phantom credit.
-- Overpayment test:
-  - Due 50, pay 60.
-  - Expected: due 0.00, credit 10.00.
-- Retry WhatsApp:
-  - In payment preview, press send, then resend again.
-  - Expected: message can be retried without recreating payment.
-- Batch invoice retry:
-  - In batch send, retry same invoice send before clicking next.
+3) Make ledger/customer list display consistent
+- Update `src/components/customers/CustomerList.tsx`
+- Update `src/pages/Customers.tsx`
+- Update `src/hooks/useCustomerBalance.ts`
+- Show:
+  - Due only when outstanding amount remains after using available credit
+  - Credit only when there is true extra money after covering all invoices
+- Prevent showing both positive due and positive credit together in normal cases.
+
+4) Update reminder/statement/payment resend calculations
+- Review and adjust:
+  - `src/components/customers/ReminderDialog.tsx`
+  - `src/components/customers/StatementDialog.tsx`
+  - `src/components/history/PaymentResendDialog.tsx`
+- Ensure all customer balance messages use the same “credit applied first” logic.
+
+5) Edge-case handling
+- Clamp money values to 2 decimals everywhere relevant.
+- Treat values smaller than `0.01` as zero.
+- Preserve WhatsApp resend features already added.
+
+6) QA checks
+- Customer has old credit, then new invoice is created:
+  - credit should reduce automatically before showing due.
+- Partial payment on a large invoice:
+  - should reduce due, not create fake credit.
+- Overpayment:
+  - should show credit only when money truly exceeds all invoices.
+- Ali Nahdi case:
+  - verify no credit is shown while any real due remains.
 
 Technical details
 - Files to modify:
-  - `src/hooks/usePayments.ts` (money rounding/clamping + safer processPayment)
-  - `src/components/customers/PaymentDialog.tsx` (full-due action + resend UX)
-  - `src/hooks/useCustomerBalance.ts` (consistent due formula)
-  - `src/pages/Customers.tsx` (consistent due display)
-  - `src/pages/Capture.tsx` (consistent total balance calculation)
-  - `src/components/invoice/BatchSendDialog.tsx` (resend retry support)
-- Backend:
-  - No schema migration needed.
-  - One-time data update to normalize tiny credit balances.
+  - `src/hooks/usePayments.ts`
+  - `src/pages/Capture.tsx`
+  - `src/hooks/useCustomerBalance.ts`
+  - `src/pages/Customers.tsx`
+  - `src/components/customers/CustomerList.tsx`
+  - `src/components/customers/ReminderDialog.tsx`
+  - `src/components/customers/StatementDialog.tsx`
+  - `src/components/history/PaymentResendDialog.tsx`
+- No schema change needed.
+- No migration needed.
+- If bad credit values already exist from old logic, I may also add a one-time data cleanup step after implementation.
