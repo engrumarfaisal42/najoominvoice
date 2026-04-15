@@ -14,7 +14,7 @@ import { Customer } from '@/types';
 import { usePayments } from '@/hooks/usePayments';
 import { generatePaymentReceivedMessage, createWhatsAppUrl } from '@/lib/messageTemplates';
 import { format } from 'date-fns';
-import { DollarSign, Calendar, FileText, Send, Copy, Check, CreditCard, RefreshCw } from 'lucide-react';
+import { DollarSign, Calendar, FileText, Send, Copy, Check, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface PaymentDialogProps {
@@ -44,10 +44,14 @@ export default function PaymentDialog({
   const [hasSent, setHasSent] = useState(false);
 
   const paymentAmount = parseFloat(amount) || 0;
-  const customerCredit = Math.abs(Number(customer.credit_balance ?? 0)) < 0.01 ? 0 : Number(customer.credit_balance ?? 0);
-  // currentBalance is already total_invoices - total_payments, don't subtract credit again
-  const remainingBalance = currentBalance - paymentAmount;
+  // currentBalance = total_invoices - total_payments (the true due)
+  const remainingBalance = money(currentBalance - paymentAmount);
   const willCreateCredit = remainingBalance < 0;
+
+  function money(v: number): number {
+    const r = Math.round(v * 100) / 100;
+    return Math.abs(r) < 0.01 ? 0 : r;
+  }
 
   const message = generatePaymentReceivedMessage({
     customerName: customer.name,
@@ -144,14 +148,6 @@ export default function PaymentDialog({
                 <span className="text-muted-foreground">Outstanding Due:</span>
                 <span className="text-foreground font-medium">{Math.max(0, currentBalance).toFixed(2)} SAR</span>
               </div>
-              {customerCredit > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <CreditCard className="w-3 h-3" /> Unallocated Credit:
-                  </span>
-                  <span className="text-primary font-medium">{customerCredit.toFixed(2)} SAR</span>
-                </div>
-              )}
             </div>
 
             <div className="space-y-2">
@@ -241,8 +237,7 @@ export default function PaymentDialog({
             {creditAfterPayment > 0 && (
               <div className="bg-primary/10 border border-primary/20 p-3 rounded-lg">
                 <p className="text-sm text-primary flex items-center gap-2">
-                  <CreditCard className="w-4 h-4" />
-                  <span className="font-medium">{creditAfterPayment.toFixed(2)} SAR</span> credit added to account
+                  💳 <span className="font-medium">{creditAfterPayment.toFixed(2)} SAR</span> credit added to account
                 </p>
               </div>
             )}

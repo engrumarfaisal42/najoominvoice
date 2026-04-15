@@ -94,77 +94,58 @@ export function usePayments(customerId?: string) {
       customerId: string; 
       paymentAmount: number;
     }) => {
-      // Get all unpaid invoices for this customer, ordered by date (oldest first)
-      const { data: unpaidInvoices, error: invoicesError } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('customer_id', customerId)
-        .neq('status', 'paid')
-        .order('invoice_date', { ascending: true });
-      
-      if (invoicesError) throw invoicesError;
+      // Get ALL invoices and payments for this customer to do proper account math
+      const [{ data: allInvoices, error: invErr }, { data: allPayments, error: payErr }] = await Promise.all([
+        supabase.from('invoices').select('*').eq('customer_id', customerId).order('invoice_date', { ascending: true }),
+        supabase.from('payments').select('*').eq('customer_id', customerId),
+      ]);
+      if (invErr) throw invErr;
+      if (payErr) throw payErr;
 
-      // Get current customer data for credit balance
-      const { data: customer, error: customerError } = await supabase
-        .from('customers')
-        .select('credit_balance')
-        .eq('id', customerId)
-        .single();
-      
-      if (customerError) throw customerError;
+      const totalInvoices = (allInvoices || []).reduce((s, i) => s + Number(i.amount), 0);
+      // totalPayments already includes the new payment we just inserted
+      const totalPayments = (allPayments || []).reduce((s, p) => s + Number(p.amount), 0);
 
-      // Calculate total due
-      const totalDue = unpaidInvoices?.reduce((sum, inv) => sum + Number(inv.amount), 0) || 0;
-      const currentCredit = Number(customer?.credit_balance || 0);
-      
-      // Available payment = new payment + existing credit
-      let availablePayment = paymentAmount + currentCredit;
+      // Net account: positive = customer owes, negative = customer has credit
+      const net = Math.round((totalInvoices - totalPayments) * 100) / 100;
+      const newCredit = net < 0 ? Math.abs(net) : 0;
+      const clampedCredit = Math.abs(newCredit) < 0.01 ? 0 : newCredit;
+
+      // Mark invoices as paid using FIFO (oldest first), up to what totalPayments covers
+      let available = totalPayments;
       const invoicesToPay: string[] = [];
-
-      // Mark invoices as paid (oldest first)
-      if (unpaidInvoices) {
-        for (const invoice of unpaidInvoices) {
-          if (availablePayment >= Number(invoice.amount)) {
-            invoicesToPay.push(invoice.id);
-            availablePayment -= Number(invoice.amount);
-          } else {
-            break; // Not enough to pay this invoice fully
-          }
+      const invoicesToUnpay: string[] = [];
+      
+      for (const inv of (allInvoices || [])) {
+        if (available >= Number(inv.amount)) {
+          invoicesToPay.push(inv.id);
+          available -= Number(inv.amount);
+        } else {
+          invoicesToUnpay.push(inv.id);
         }
       }
 
-      // Update invoices to paid
+      // Batch update invoice statuses
       if (invoicesToPay.length > 0) {
-        const { error: updateError } = await supabase
-          .from('invoices')
-          .update({ status: 'paid' })
-          .in('id', invoicesToPay);
-        
-        if (updateError) throw updateError;
+        const { error } = await supabase.from('invoices').update({ status: 'paid' }).in('id', invoicesToPay);
+        if (error) throw error;
+      }
+      if (invoicesToUnpay.length > 0) {
+        // Revert any that were incorrectly marked paid before
+        const { error } = await supabase.from('invoices').update({ status: 'sent' }).in('id', invoicesToUnpay).eq('status', 'paid');
+        if (error) throw error;
       }
 
-      // Calculate remaining credit (if overpaid)
-      const totalPaidInvoices = invoicesToPay.length > 0 && unpaidInvoices
-        ? unpaidInvoices
-            .filter(inv => invoicesToPay.includes(inv.id))
-            .reduce((sum, inv) => sum + Number(inv.amount), 0)
-        : 0;
-      
-      // Round to 2 decimals and clamp near-zero
-      const rawCredit = paymentAmount + currentCredit - totalPaidInvoices;
-      const newCredit = Math.abs(rawCredit) < 0.01 ? 0 : Math.round(rawCredit * 100) / 100;
-      
       // Update customer credit balance
       const { error: creditError } = await supabase
         .from('customers')
-        .update({ credit_balance: Math.max(0, newCredit) })
+        .update({ credit_balance: clampedCredit })
         .eq('id', customerId);
-      
       if (creditError) throw creditError;
 
       return {
         invoicesPaid: invoicesToPay.length,
-        creditBalance: Math.max(0, newCredit),
+        creditBalance: clampedCredit,
       };
     },
     onSuccess: (data) => {

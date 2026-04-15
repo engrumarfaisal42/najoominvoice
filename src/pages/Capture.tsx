@@ -105,6 +105,23 @@ export default function Capture() {
         image_url: publicUrl,
       });
 
+      // Auto-apply existing credit to the new invoice
+      const currentCredit = Number(selectedCustomer.credit_balance ?? 0);
+      if (currentCredit > 0.01) {
+        const invoiceAmount = data.amount;
+        if (currentCredit >= invoiceAmount) {
+          // Credit fully covers the invoice — mark paid, reduce credit
+          await supabase.from('invoices').update({ status: 'paid' }).eq('id', result.id);
+          const newCredit = Math.round((currentCredit - invoiceAmount) * 100) / 100;
+          await supabase.from('customers').update({ credit_balance: Math.abs(newCredit) < 0.01 ? 0 : newCredit }).eq('id', selectedCustomer.id);
+          toast({ title: 'Credit applied', description: `Invoice auto-paid from ${currentCredit.toFixed(2)} SAR credit` });
+        } else {
+          // Credit partially covers — use all credit, invoice stays pending
+          await supabase.from('customers').update({ credit_balance: 0 }).eq('id', selectedCustomer.id);
+          toast({ title: 'Credit applied', description: `${currentCredit.toFixed(2)} SAR credit applied, remaining due: ${(invoiceAmount - currentCredit).toFixed(2)} SAR` });
+        }
+      }
+
       setCreatedInvoice(result as Invoice);
       setStep('preview');
     } catch (error) {
