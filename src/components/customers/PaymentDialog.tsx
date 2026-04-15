@@ -237,8 +237,7 @@ export default function PaymentDialog({
             {creditAfterPayment > 0 && (
               <div className="bg-primary/10 border border-primary/20 p-3 rounded-lg">
                 <p className="text-sm text-primary flex items-center gap-2">
-                  <CreditCard className="w-4 h-4" />
-                  <span className="font-medium">{creditAfterPayment.toFixed(2)} SAR</span> credit added to account
+                  💳 <span className="font-medium">{creditAfterPayment.toFixed(2)} SAR</span> credit added to account
                 </p>
               </div>
             )}
