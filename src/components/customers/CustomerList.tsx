@@ -103,10 +103,16 @@ export default function CustomerList({
                       </div>
                       {getBalance && (
                         <div className="mt-1 space-y-0.5">
-                          <p className={`text-sm font-medium ${balance > 0 ? 'text-destructive' : 'text-success'}`}>
-                            Balance: {balance.toFixed(2)} SAR
-                          </p>
-                          {creditBalance > 0 && (
+                          {balance > 0 ? (
+                            <p className="text-sm font-medium text-destructive">
+                              Due: {balance.toFixed(2)} SAR
+                            </p>
+                          ) : balance === 0 && creditBalance <= 0 ? (
+                            <p className="text-sm font-medium text-success">
+                              No Balance
+                            </p>
+                          ) : null}
+                          {creditBalance > 0 && balance <= 0 && (
                             <p className="text-xs text-success flex items-center gap-1">
                               <CreditCard className="w-3 h-3" />
                               Credit: {creditBalance.toFixed(2)} SAR
