@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,6 +12,34 @@ serve(async (req) => {
   }
 
   try {
+    // Validate session token
+    const sessionToken = req.headers.get("x-session-token");
+    if (!sessionToken) {
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    const { data: session, error: sessionError } = await supabaseAdmin
+      .from("admin_session")
+      .select("id")
+      .eq("session_token", sessionToken)
+      .gt("expires_at", new Date().toISOString())
+      .single();
+
+    if (sessionError || !session) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired session" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { imageBase64 } = await req.json();
 
     if (!imageBase64) {
@@ -74,7 +103,6 @@ Do not include any other text, markdown, or explanation - just the JSON object.`
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
     
-    // Parse the JSON from the response
     let extractedData = {
       invoice_date: "",
       invoice_number: "",
@@ -82,7 +110,6 @@ Do not include any other text, markdown, or explanation - just the JSON object.`
     };
 
     try {
-      // Try to parse the JSON directly
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         extractedData = JSON.parse(jsonMatch[0]);
@@ -104,7 +131,7 @@ Do not include any other text, markdown, or explanation - just the JSON object.`
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: error instanceof Error ? error.message : "Failed to extract invoice data" 
+        error: "Failed to extract invoice data"
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
