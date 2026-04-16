@@ -43,8 +43,10 @@ export default function Capture() {
     setIsProcessing(true);
 
     try {
+      const sessionToken = localStorage.getItem('invoice_app_session') || '';
       const { data, error } = await supabase.functions.invoke('extract-invoice', {
         body: { imageBase64 },
+        headers: { 'x-session-token': sessionToken },
       });
 
       if (error) throw error;
