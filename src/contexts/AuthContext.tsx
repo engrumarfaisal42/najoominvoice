@@ -10,9 +10,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const ADMIN_USERNAME = 'najoommarket';
-const ADMIN_PASSWORD = 'Faisal@@7';
 const SESSION_KEY = 'invoice_app_session';
+
+// Helper to set the session token header on the Supabase client
+function setSessionHeader(token: string | null) {
+  if (token) {
+    // @ts-ignore - setting global headers for RLS validation
+    supabase['rest']['headers']['x-session-token'] = token;
+    // Also set on realtime if needed
+  } else {
+    // @ts-ignore
+    delete supabase['rest']['headers']['x-session-token'];
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -25,6 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkSession = async () => {
     const sessionToken = localStorage.getItem(SESSION_KEY);
     if (sessionToken) {
+      // Set header before making the validation query
+      setSessionHeader(sessionToken);
       try {
         const { data, error } = await supabase
           .from('admin_session')
@@ -37,34 +49,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsAuthenticated(true);
         } else {
           localStorage.removeItem(SESSION_KEY);
+          setSessionHeader(null);
         }
       } catch {
         localStorage.removeItem(SESSION_KEY);
+        setSessionHeader(null);
       }
     }
     setIsLoading(false);
   };
 
   const login = async (username: string, password: string): Promise<boolean> => {
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      const sessionToken = crypto.randomUUID();
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 30); // 30 days
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-login', {
+        body: { username, password },
+      });
 
-      try {
-        await supabase.from('admin_session').insert({
-          session_token: sessionToken,
-          expires_at: expiresAt.toISOString(),
-        });
-
-        localStorage.setItem(SESSION_KEY, sessionToken);
-        setIsAuthenticated(true);
-        return true;
-      } catch {
+      if (error || !data?.session_token) {
         return false;
       }
+
+      const sessionToken = data.session_token;
+      localStorage.setItem(SESSION_KEY, sessionToken);
+      setSessionHeader(sessionToken);
+      setIsAuthenticated(true);
+      return true;
+    } catch {
+      return false;
     }
-    return false;
   };
 
   const logout = async () => {
@@ -73,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await supabase.from('admin_session').delete().eq('session_token', sessionToken);
     }
     localStorage.removeItem(SESSION_KEY);
+    setSessionHeader(null);
     setIsAuthenticated(false);
   };
 
