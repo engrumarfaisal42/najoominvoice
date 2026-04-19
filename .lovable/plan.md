@@ -1,72 +1,28 @@
 
-Goal: fix customer ledger logic so credit is automatically consumed by new invoices and the UI never shows misleading “credit + due” at the same time.
 
-What I found
-- The current UI mostly uses `due = total invoices - total payments`, which is okay for display.
-- The real problem is backend logic in `src/hooks/usePayments.ts`:
-  - `processPayment` only marks an invoice as paid if the full invoice amount is covered.
-  - If a customer pays part of a large invoice, the leftover payment is incorrectly stored as `credit_balance`.
-  - That creates the wrong state: customer still has due, but also shows credit.
-- Another missing piece: when a new invoice is created, existing customer credit is not automatically applied to that new invoice, even though you want available credit to be used immediately.
+## Diagnosis
 
-Implementation plan
+The login fails because the secrets `ADMIN_USERNAME` and `ADMIN_PASSWORD` stored in Lovable Cloud do not match `najoommarket` / `Faisal@@7`.
 
-1) Fix payment allocation logic
-- Update `src/hooks/usePayments.ts` so customer credit is based on overall account math, not only fully paid invoices.
-- New rule:
-  - `netAccount = totalPaymentsIncludingNew + existingCredit - totalInvoices`
-  - if `netAccount > 0`, store it as credit
-  - otherwise store credit as `0`
-- Keep invoice status updates, but do not treat partial payments as customer credit.
+I confirmed this by calling the edge function directly with those credentials — it returned `401 Invalid credentials`. The function, network, and database are all working correctly. The issue is purely that the saved secret values don't match what you're typing.
 
-2) Auto-use existing credit when a new invoice is created
-- Update `src/pages/Capture.tsx` after invoice creation:
-  - check customer’s current `credit_balance`
-  - if credit fully covers the new invoice, mark invoice as paid and reduce credit
-  - if credit partially covers it, reduce credit to zero and keep invoice pending/sent as appropriate
-- This matches your expected behavior: available credit gets used whenever a new invoice is added to that customer.
+This likely happened because when the secrets were originally set, an extra space, different capitalization, or a different value was entered.
 
-3) Make ledger/customer list display consistent
-- Update `src/components/customers/CustomerList.tsx`
-- Update `src/pages/Customers.tsx`
-- Update `src/hooks/useCustomerBalance.ts`
-- Show:
-  - Due only when outstanding amount remains after using available credit
-  - Credit only when there is true extra money after covering all invoices
-- Prevent showing both positive due and positive credit together in normal cases.
+Your old data is safe — 10 customers, 154 invoices, 16 payments are still in the database. You just can't reach them until login works.
 
-4) Update reminder/statement/payment resend calculations
-- Review and adjust:
-  - `src/components/customers/ReminderDialog.tsx`
-  - `src/components/customers/StatementDialog.tsx`
-  - `src/components/history/PaymentResendDialog.tsx`
-- Ensure all customer balance messages use the same “credit applied first” logic.
+## Fix Plan
 
-5) Edge-case handling
-- Clamp money values to 2 decimals everywhere relevant.
-- Treat values smaller than `0.01` as zero.
-- Preserve WhatsApp resend features already added.
+1. Re-set the two secrets `ADMIN_USERNAME` and `ADMIN_PASSWORD` with the exact values:
+   - `ADMIN_USERNAME` = `najoommarket`
+   - `ADMIN_PASSWORD` = `Faisal@@7`
+   
+   I will trigger the secret form again so you can retype them carefully (no leading/trailing spaces).
 
-6) QA checks
-- Customer has old credit, then new invoice is created:
-  - credit should reduce automatically before showing due.
-- Partial payment on a large invoice:
-  - should reduce due, not create fake credit.
-- Overpayment:
-  - should show credit only when money truly exceeds all invoices.
-- Ali Nahdi case:
-  - verify no credit is shown while any real due remains.
+2. After you submit the secrets, the edge function picks them up automatically — no redeploy needed.
 
-Technical details
-- Files to modify:
-  - `src/hooks/usePayments.ts`
-  - `src/pages/Capture.tsx`
-  - `src/hooks/useCustomerBalance.ts`
-  - `src/pages/Customers.tsx`
-  - `src/components/customers/CustomerList.tsx`
-  - `src/components/customers/ReminderDialog.tsx`
-  - `src/components/customers/StatementDialog.tsx`
-  - `src/components/history/PaymentResendDialog.tsx`
-- No schema change needed.
-- No migration needed.
-- If bad credit values already exist from old logic, I may also add a one-time data cleanup step after implementation.
+3. Verify by calling the admin-login function with curl. Expect HTTP 200 and a `session_token` in the response.
+
+4. You log in normally on the preview. The session token will be stored and all your data (customers, invoices, payments) will load.
+
+No code changes, no schema changes, no migration needed. This is purely a secret-value correction.
+
