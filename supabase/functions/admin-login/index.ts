@@ -32,7 +32,20 @@ serve(async (req) => {
       );
     }
 
-    if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    const u = (username ?? "").trim();
+    const p = (password ?? "").trim();
+    const eu = ADMIN_USERNAME.trim();
+    const ep = ADMIN_PASSWORD.trim();
+
+    if (u !== eu || p !== ep) {
+      console.log("Auth mismatch", {
+        input_user_len: u.length,
+        stored_user_len: eu.length,
+        input_pw_len: p.length,
+        stored_pw_len: ep.length,
+        user_match: u === eu,
+        pw_match: p === ep,
+      });
       return new Response(
         JSON.stringify({ error: "Invalid credentials" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
