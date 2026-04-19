@@ -11,17 +11,38 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const SESSION_KEY = 'invoice_app_session';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 
-// Helper to set the session token header on the Supabase client
-function setSessionHeader(token: string | null) {
-  if (token) {
-    // @ts-ignore - setting global headers for RLS validation
-    supabase['rest']['headers']['x-session-token'] = token;
-    // Also set on realtime if needed
-  } else {
-    // @ts-ignore
-    delete supabase['rest']['headers']['x-session-token'];
-  }
+// Install a global fetch wrapper that injects x-session-token on every
+// Supabase request (REST, Storage, Functions). Reads the token live from
+// localStorage so it stays in sync with login/logout and reloads.
+let fetchPatched = false;
+function installFetchInterceptor() {
+  if (fetchPatched || typeof window === 'undefined') return;
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+    try {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+          ? input.toString()
+          : (input as Request).url;
+
+      if (SUPABASE_URL && url.startsWith(SUPABASE_URL)) {
+        const token = localStorage.getItem(SESSION_KEY);
+        if (token) {
+          const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+          headers.set('x-session-token', token);
+          init = { ...init, headers };
+        }
+      }
+    } catch {
+      // ignore — fall through to original fetch
+    }
+    return originalFetch(input as any, init);
+  };
+  fetchPatched = true;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -29,31 +50,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    installFetchInterceptor();
     checkSession();
   }, []);
 
   const checkSession = async () => {
     const sessionToken = localStorage.getItem(SESSION_KEY);
     if (sessionToken) {
-      // Set header before making the validation query
-      setSessionHeader(sessionToken);
       try {
         const { data, error } = await supabase
           .from('admin_session')
           .select('*')
           .eq('session_token', sessionToken)
           .gt('expires_at', new Date().toISOString())
-          .single();
+          .maybeSingle();
 
         if (data && !error) {
           setIsAuthenticated(true);
         } else {
           localStorage.removeItem(SESSION_KEY);
-          setSessionHeader(null);
         }
       } catch {
         localStorage.removeItem(SESSION_KEY);
-        setSessionHeader(null);
       }
     }
     setIsLoading(false);
@@ -69,9 +87,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      const sessionToken = data.session_token;
-      localStorage.setItem(SESSION_KEY, sessionToken);
-      setSessionHeader(sessionToken);
+      localStorage.setItem(SESSION_KEY, data.session_token);
+      installFetchInterceptor();
       setIsAuthenticated(true);
       return true;
     } catch {
@@ -85,7 +102,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await supabase.from('admin_session').delete().eq('session_token', sessionToken);
     }
     localStorage.removeItem(SESSION_KEY);
-    setSessionHeader(null);
     setIsAuthenticated(false);
   };
 
