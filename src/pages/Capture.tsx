@@ -17,6 +17,70 @@ import { ArrowLeft, Users, CheckCircle } from 'lucide-react';
 
 type Step = 'customer' | 'capture' | 'review' | 'preview' | 'done';
 
+const OCR_MAX_BASE64_LENGTH = 1_000_000;
+const OCR_MAX_DIMENSION = 1600;
+
+const readFileAsBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = typeof reader.result === 'string' ? reader.result.split(',')[1] : '';
+      if (result) resolve(result);
+      else reject(new Error('Could not read image data'));
+    };
+    reader.onerror = () => reject(new Error('Could not read image data'));
+    reader.readAsDataURL(file);
+  });
+
+const loadImageElement = (file: File) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not process image'));
+    };
+
+    image.src = objectUrl;
+  });
+
+const getOptimizedImageBase64 = async (file: File) => {
+  const originalBase64 = await readFileAsBase64(file);
+  if (originalBase64.length <= OCR_MAX_BASE64_LENGTH) {
+    return originalBase64;
+  }
+
+  const image = await loadImageElement(file);
+  const scale = Math.min(1, OCR_MAX_DIMENSION / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return originalBase64;
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+
+  for (const quality of [0.82, 0.72, 0.62, 0.55]) {
+    const compressedBase64 = canvas.toDataURL('image/jpeg', quality).split(',')[1] || '';
+    if (compressedBase64.length > 0 && compressedBase64.length <= OCR_MAX_BASE64_LENGTH) {
+      return compressedBase64;
+    }
+  }
+
+  return canvas.toDataURL('image/jpeg', 0.5).split(',')[1] || originalBase64;
+};
+
 export default function Capture() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -38,15 +102,16 @@ export default function Capture() {
     setStep('capture');
   };
 
-  const handleCapture = async (imageBase64: string, file: File) => {
+  const handleCapture = async (_imageBase64: string, file: File) => {
     setCapturedImage(file);
     setIsProcessing(true);
 
     try {
       const sessionToken = localStorage.getItem('invoice_app_session') || '';
-      console.log('[Capture] Invoking extract-invoice, image size:', file.size, 'base64 len:', imageBase64.length);
+      const optimizedImageBase64 = await getOptimizedImageBase64(file);
+      console.log('[Capture] Invoking extract-invoice, image size:', file.size, 'optimized base64 len:', optimizedImageBase64.length);
       const { data, error } = await supabase.functions.invoke('extract-invoice', {
-        body: { imageBase64 },
+        body: { imageBase64: optimizedImageBase64 },
         headers: { 'x-session-token': sessionToken },
       });
 
@@ -75,7 +140,9 @@ export default function Capture() {
       console.error('[Capture] Extraction error:', error);
       toast({
         title: 'Extraction failed',
-        description: error?.message || 'Please enter the details manually',
+        description: error?.message === 'Failed to send a request to the Edge Function'
+          ? 'Image upload was too large for OCR. The app now compresses photos automatically, so please try again.'
+          : error?.message || 'Please enter the details manually',
         variant: 'destructive',
       });
     }
