@@ -44,10 +44,13 @@ export default function Capture() {
 
     try {
       const sessionToken = localStorage.getItem('invoice_app_session') || '';
+      console.log('[Capture] Invoking extract-invoice, image size:', file.size, 'base64 len:', imageBase64.length);
       const { data, error } = await supabase.functions.invoke('extract-invoice', {
         body: { imageBase64 },
         headers: { 'x-session-token': sessionToken },
       });
+
+      console.log('[Capture] extract-invoice response:', { data, error });
 
       if (error) throw error;
 
@@ -57,18 +60,22 @@ export default function Capture() {
           invoice_date: data.data.invoice_date || '',
           amount: data.data.amount || '',
         });
-        toast({ title: 'Invoice data extracted successfully!' });
+        const hasAny = data.data.invoice_number || data.data.invoice_date || data.data.amount;
+        toast({
+          title: hasAny ? 'Invoice data extracted!' : 'No data found',
+          description: hasAny ? undefined : 'Please enter the details manually',
+        });
       } else {
-        toast({ 
-          title: 'Could not extract data automatically',
-          description: 'Please enter the details manually',
+        toast({
+          title: 'Could not extract data',
+          description: data?.error || 'Please enter the details manually',
         });
       }
-    } catch (error) {
-      console.error('Extraction error:', error);
-      toast({ 
+    } catch (error: any) {
+      console.error('[Capture] Extraction error:', error);
+      toast({
         title: 'Extraction failed',
-        description: 'Please enter the details manually',
+        description: error?.message || 'Please enter the details manually',
         variant: 'destructive',
       });
     }
