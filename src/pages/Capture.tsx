@@ -246,6 +246,25 @@ export default function Capture() {
               </CardContent>
             </Card>
             <CameraCapture onCapture={handleCapture} isProcessing={isProcessing} />
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full h-12"
+              onClick={() => {
+                setCapturedImage(new File([], 'manual-entry.jpg', { type: 'image/jpeg' }));
+                setExtractedData(null);
+                setStep('review');
+              }}
+            >
+              Enter Invoice Details Manually
+            </Button>
           </div>
         )}
 
