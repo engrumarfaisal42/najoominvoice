@@ -97,7 +97,22 @@ Do not include any other text, markdown, or explanation - just the JSON object.`
     if (!response.ok) {
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      if (response.status === 429) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Rate limit exceeded. Please wait a moment and try again." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (response.status === 402) {
+        return new Response(
+          JSON.stringify({ success: false, error: "AI credits exhausted. Please add credits in Settings." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: `AI gateway error: ${response.status}`, detail: errorText.slice(0, 200) }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const data = await response.json();
