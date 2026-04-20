@@ -83,18 +83,22 @@ export default function Capture() {
     setIsUploading(true);
 
     try {
-      // Upload image to storage
-      const fileName = `${selectedCustomer.id}/${Date.now()}_${capturedImage.name}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('invoices')
-        .upload(fileName, capturedImage);
+      let publicUrl = '';
+      const isManualEntry = capturedImage.size === 0;
 
-      if (uploadError) throw uploadError;
+      if (!isManualEntry) {
+        const fileName = `${selectedCustomer.id}/${Date.now()}_${capturedImage.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('invoices')
+          .upload(fileName, capturedImage);
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('invoices')
-        .getPublicUrl(fileName);
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl: url } } = supabase.storage
+          .from('invoices')
+          .getPublicUrl(fileName);
+        publicUrl = url;
+      }
 
       setImageUrl(publicUrl);
 
@@ -246,6 +250,25 @@ export default function Capture() {
               </CardContent>
             </Card>
             <CameraCapture onCapture={handleCapture} isProcessing={isProcessing} />
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full h-12"
+              onClick={() => {
+                setCapturedImage(new File([], 'manual-entry.jpg', { type: 'image/jpeg' }));
+                setExtractedData(null);
+                setStep('review');
+              }}
+            >
+              Enter Invoice Details Manually
+            </Button>
           </div>
         )}
 
