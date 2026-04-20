@@ -83,18 +83,22 @@ export default function Capture() {
     setIsUploading(true);
 
     try {
-      // Upload image to storage
-      const fileName = `${selectedCustomer.id}/${Date.now()}_${capturedImage.name}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('invoices')
-        .upload(fileName, capturedImage);
+      let publicUrl = '';
+      const isManualEntry = capturedImage.size === 0;
 
-      if (uploadError) throw uploadError;
+      if (!isManualEntry) {
+        const fileName = `${selectedCustomer.id}/${Date.now()}_${capturedImage.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('invoices')
+          .upload(fileName, capturedImage);
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('invoices')
-        .getPublicUrl(fileName);
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl: url } } = supabase.storage
+          .from('invoices')
+          .getPublicUrl(fileName);
+        publicUrl = url;
+      }
 
       setImageUrl(publicUrl);
 
