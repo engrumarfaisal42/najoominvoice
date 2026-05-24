@@ -1,45 +1,35 @@
+## Goal
+Convert your current web app into a true native mobile app using **Capacitor**, so you can submit it to the Apple App Store and Google Play Store.
 
+## What I'll do in the project
+1. Install Capacitor dependencies:
+   - `@capacitor/core`, `@capacitor/cli`, `@capacitor/ios`, `@capacitor/android`
+2. Create `capacitor.config.ts` with:
+   - appId: `app.lovable.0e6ab7db513a44409c73939edff2e3f2`
+   - appName: `najoominvoice`
+   - A hot-reload `server.url` pointing at your Lovable sandbox so you can test on a real device while developing.
+3. Make sure camera/photo capture works natively (your invoice OCR flow) — install `@capacitor/camera` if needed.
 
-## Diagnosis (confirmed)
+## What YOU need to do (must be done on your own computer — cannot be done inside Lovable)
+Publishing to the stores requires a Mac (for iOS) and/or a Windows/Mac/Linux machine with Android Studio. After I finish the setup:
 
-Database content right now:
-- customers: **10**
-- invoices: **154**
-- payments: **16**
-- active sessions: 25 (all valid)
+1. Click **GitHub → Connect to GitHub** in Lovable and push the project to your own repo.
+2. `git clone` the repo to your computer.
+3. `npm install`
+4. `npx cap add ios` and/or `npx cap add android`
+5. `npm run build`
+6. `npx cap sync`
+7. Run on device/emulator:
+   - Android: `npx cap run android` (requires Android Studio)
+   - iOS: `npx cap run ios` (requires a Mac with Xcode)
 
-Nothing is missing. The empty UI is caused by a client bug, not data loss.
+## To actually publish
+- **Google Play**: ~$25 one-time developer account. Build a signed AAB in Android Studio → upload via Play Console.
+- **Apple App Store**: $99/year Apple Developer account. Archive in Xcode → upload via App Store Connect → submit for review.
 
-The current `AuthContext` does:
-```ts
-supabase['rest']['headers']['x-session-token'] = token;
-```
-This mutates a non-effective internal field. In supabase-js v2 the PostgREST builder uses the headers captured at `createClient()` time, so the `x-session-token` header never goes out on the wire. RLS policy `has_valid_session()` then returns false → API returns `[]` (200, empty array). Network logs confirm: no `x-session-token` header on the `/rest/v1/...` calls.
+## Important notes
+- Lovable can only do the **Capacitor setup**. The actual store submission (signing, screenshots, store listings, review) must be done by you outside Lovable.
+- The hot-reload `server.url` is great for development but **must be removed before submitting** to the stores — otherwise the published app will load from the Lovable preview instead of your bundled code.
+- Reference: https://lovable.dev/blogs/TODO
 
-## Fix Plan
-
-Single concern: make every Supabase request include `x-session-token` whenever a session exists. No data restoration needed.
-
-1. **Switch to a wrapped fetch in the Supabase client.**
-   Since `src/integrations/supabase/client.ts` is auto-generated and must not be edited, attach the header by replacing `window.fetch` for Supabase URLs from `AuthContext`:
-   - On app load and on login: install a `fetch` wrapper that, for any request to `${VITE_SUPABASE_URL}`, injects `x-session-token: <token from localStorage>`.
-   - On logout: uninstall the wrapper (or have it no-op when no token is stored).
-   - Read the token from `localStorage` inside the wrapper on every call (so it stays fresh and survives reloads).
-
-2. **Keep storage uploads working.**
-   The wrapper applies to all Supabase URLs (`/rest`, `/storage`, `/functions`), which is exactly what we want — storage and edge functions also rely on the session for RLS / auth checks.
-
-3. **Verification (after switch to default mode):**
-   - Reload preview, log in with `najoommarket` / `Faisal@@7`.
-   - Confirm Customers page shows 10 rows, Invoices 154, Payments 16.
-   - Inspect a `/rest/v1/customers` request — header `x-session-token` must be present.
-   - Test creating a new invoice and uploading an image still work.
-
-4. **No DB migration. No edge function change. No data restore.** Everything is recoverable purely by fixing how the header is sent.
-
-## Files to edit
-
-- `src/contexts/AuthContext.tsx` — replace the broken `setSessionHeader` with a global `fetch` wrapper installed once on mount and updated on login/logout.
-
-That's the entire fix. Your 10 customers / 154 invoices / 16 payments will reappear immediately after this change.
-
+Want me to proceed with the Capacitor setup?
