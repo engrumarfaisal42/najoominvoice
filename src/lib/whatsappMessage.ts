@@ -5,6 +5,7 @@ interface MessageParams {
   customerName: string;
   customerNameAr?: string;
   invoiceDate: string;
+  invoiceTime?: string;
   invoiceNumber: string;
   currentAmount: number;
   totalBalance: number;
@@ -17,6 +18,7 @@ export function generateWhatsAppMessage(params: MessageParams): string {
     customerName,
     customerNameAr,
     invoiceDate,
+    invoiceTime,
     invoiceNumber,
     currentAmount,
     totalBalance,
@@ -32,7 +34,7 @@ export function generateWhatsAppMessage(params: MessageParams): string {
 
 نود إعلامكم بتفاصيل الفاتورة الجديدة:
 
-📅 تاريخ الفاتورة: ${format(new Date(invoiceDate), 'dd/MM/yyyy')}
+📅 تاريخ الفاتورة: ${format(new Date(invoiceDate), 'dd/MM/yyyy')}${invoiceTime ? `\n🕐 وقت الفاتورة: ${invoiceTime}` : ''}
 🧾 رقم الفاتورة: ${invoiceNumber}
 💵 مبلغ الفاتورة الحالية: ${currentAmount.toFixed(2)} ريال
 📊 إجمالي الرصيد المستحق: ${totalBalance.toFixed(2)} ريال
@@ -50,7 +52,7 @@ ${imageUrl}
 
 We would like to inform you about your new invoice:
 
-📅 Invoice Date: ${format(new Date(invoiceDate), 'dd/MM/yyyy')}
+📅 Invoice Date: ${format(new Date(invoiceDate), 'dd/MM/yyyy')}${invoiceTime ? `\n🕐 Invoice Time: ${invoiceTime}` : ''}
 🧾 Invoice Number: ${invoiceNumber}
 💵 Current Invoice Amount: ${currentAmount.toFixed(2)} SAR
 📊 Total Outstanding Balance: ${totalBalance.toFixed(2)} SAR

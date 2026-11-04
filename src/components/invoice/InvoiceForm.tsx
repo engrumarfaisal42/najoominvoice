@@ -10,7 +10,7 @@ import { format } from 'date-fns';
 interface InvoiceFormProps {
   extractedData?: ExtractedInvoiceData;
   customer: Customer;
-  onSubmit: (data: { invoice_number: string; invoice_date: string; amount: number }) => void;
+  onSubmit: (data: { invoice_number: string; invoice_date: string; amount: number; invoice_time?: string }) => void;
   isLoading?: boolean;
 }
 
@@ -18,12 +18,14 @@ export default function InvoiceForm({ extractedData, customer, onSubmit, isLoadi
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [amount, setAmount] = useState('');
+  const [invoiceTime, setInvoiceTime] = useState('');
 
   useEffect(() => {
     if (extractedData) {
       if (extractedData.invoice_number) setInvoiceNumber(extractedData.invoice_number);
       if (extractedData.invoice_date) setInvoiceDate(extractedData.invoice_date);
       if (extractedData.amount) setAmount(extractedData.amount);
+      if (extractedData.invoice_time) setInvoiceTime(extractedData.invoice_time);
     }
   }, [extractedData]);
 
@@ -33,6 +35,7 @@ export default function InvoiceForm({ extractedData, customer, onSubmit, isLoadi
       invoice_number: invoiceNumber,
       invoice_date: invoiceDate,
       amount: parseFloat(amount),
+      invoice_time: invoiceTime || undefined,
     });
   };
 
@@ -73,6 +76,20 @@ export default function InvoiceForm({ extractedData, customer, onSubmit, isLoadi
               onChange={(e) => setInvoiceDate(e.target.value)}
               className="h-12"
               required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="invoiceTime" className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Invoice Time (optional)
+            </Label>
+            <Input
+              id="invoiceTime"
+              type="time"
+              value={invoiceTime}
+              onChange={(e) => setInvoiceTime(e.target.value)}
+              className="h-12"
             />
           </div>
 

@@ -27,4 +27,5 @@ export interface ExtractedInvoiceData {
   invoice_number: string;
   invoice_date: string;
   amount: string;
+  invoice_time?: string;
 }

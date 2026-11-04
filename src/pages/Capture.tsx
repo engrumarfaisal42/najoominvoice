@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import QrScanner from '@/components/invoice/QrScanner';
-import { parseZatcaQr, zatcaDateToInput } from '@/lib/zatcaQr';
+import { parseZatcaQr, zatcaDateToInput, zatcaTimeToInput } from '@/lib/zatcaQr';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/layout/AppLayout';
 import CameraCapture from '@/components/invoice/CameraCapture';
@@ -98,6 +98,7 @@ export default function Capture() {
   const [createdInvoice, setCreatedInvoice] = useState<Invoice | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [invoiceTime, setInvoiceTime] = useState('');
 
   const handleCustomerSelect = (customer: Customer) => {
     setSelectedCustomer(customer);
@@ -118,6 +119,7 @@ export default function Capture() {
       invoice_number: '',
       invoice_date: zatcaDateToInput(qr.timestamp),
       amount: parseFloat(qr.total!).toFixed(2),
+      invoice_time: zatcaTimeToInput(qr.timestamp),
     });
     toast({ title: 'QR scanned!', description: `Total: ${qr.total} SAR` });
     setStep('review');
@@ -172,8 +174,9 @@ export default function Capture() {
     setStep('review');
   };
 
-  const handleInvoiceSubmit = async (data: { invoice_number: string; invoice_date: string; amount: number }) => {
+  const handleInvoiceSubmit = async (data: { invoice_number: string; invoice_date: string; amount: number; invoice_time?: string }) => {
     if (!selectedCustomer || !capturedImage) return;
+    setInvoiceTime(data.invoice_time || '');
 
     setIsUploading(true);
 
@@ -427,6 +430,7 @@ export default function Capture() {
             invoice={createdInvoice}
             totalBalance={totalBalance}
             imageUrl={imageUrl}
+            invoiceTime={invoiceTime}
             onSent={handleMessageSent}
           />
         )}

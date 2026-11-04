@@ -12,6 +12,7 @@ interface MessagePreviewProps {
   invoice: Invoice;
   totalBalance: number;
   imageUrl: string;
+  invoiceTime?: string;
   onSent: (language: 'english' | 'arabic') => void;
 }
 
@@ -20,6 +21,7 @@ export default function MessagePreview({
   invoice, 
   totalBalance, 
   imageUrl,
+  invoiceTime,
   onSent 
 }: MessagePreviewProps) {
   const [language, setLanguage] = useState<'english' | 'arabic'>('english');
@@ -30,6 +32,7 @@ export default function MessagePreview({
     customerName: customer.name,
     customerNameAr: customer.name_ar,
     invoiceDate: invoice.invoice_date,
+    invoiceTime,
     invoiceNumber: invoice.invoice_number,
     currentAmount: Number(invoice.amount),
     totalBalance,
