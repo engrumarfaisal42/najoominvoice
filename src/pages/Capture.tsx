@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import QrScanner from '@/components/invoice/QrScanner';
+import { parseZatcaQr, zatcaDateToInput } from '@/lib/zatcaQr';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/layout/AppLayout';
 import CameraCapture from '@/components/invoice/CameraCapture';
@@ -13,7 +15,7 @@ import { usePayments } from '@/hooks/usePayments';
 import { supabase } from '@/integrations/supabase/client';
 import { Customer, ExtractedInvoiceData, Invoice } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Users, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Users, CheckCircle, QrCode, ImagePlus } from 'lucide-react';
 
 type Step = 'customer' | 'capture' | 'review' | 'preview' | 'done';
 
@@ -101,6 +103,25 @@ export default function Capture() {
     setSelectedCustomer(customer);
     setStep('capture');
   };
+
+  const [showQr, setShowQr] = useState(false);
+
+  const handleQrResult = useCallback((text: string) => {
+    setShowQr(false);
+    const qr = parseZatcaQr(text);
+    if (!qr) {
+      toast({ title: 'QR not readable', description: 'Please use photo or enter manually', variant: 'destructive' });
+      return;
+    }
+    setCapturedImage(new File([], 'manual-entry.jpg', { type: 'image/jpeg' }));
+    setExtractedData({
+      invoice_number: '',
+      invoice_date: zatcaDateToInput(qr.timestamp),
+      amount: parseFloat(qr.total!).toFixed(2),
+    });
+    toast({ title: 'QR scanned!', description: `Total: ${qr.total} SAR` });
+    setStep('review');
+  }, [toast]);
 
   const handleCapture = async (_imageBase64: string, file: File) => {
     setCapturedImage(file);
@@ -323,6 +344,22 @@ export default function Capture() {
                 </p>
               </CardContent>
             </Card>
+            {showQr ? (
+              <QrScanner onResult={handleQrResult} onClose={() => setShowQr(false)} />
+            ) : (
+              <Button className="w-full h-14 text-base" onClick={() => setShowQr(true)}>
+                <QrCode className="w-5 h-5 mr-2" />
+                Scan Invoice QR Code (Best)
+              </Button>
+            )}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or AI photo</span>
+              </div>
+            </div>
             <CameraCapture onCapture={handleCapture} isProcessing={isProcessing} />
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -347,12 +384,41 @@ export default function Capture() {
         )}
 
         {step === 'review' && selectedCustomer && (
+          <>
+          <Card>
+            <CardContent className="pt-4 space-y-2">
+              <p className="text-sm font-medium flex items-center gap-2">
+                <ImagePlus className="w-4 h-4" /> Invoice Photo (optional)
+              </p>
+              {capturedImage && capturedImage.size > 0 ? (
+                <p className="text-sm text-primary">✓ Photo attached: {capturedImage.name}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">No photo attached yet</p>
+              )}
+              <label className="block">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) setCapturedImage(f);
+                  }}
+                />
+                <span className="inline-flex w-full items-center justify-center h-11 rounded-md border border-input bg-background text-sm font-medium cursor-pointer hover:bg-accent">
+                  {capturedImage && capturedImage.size > 0 ? 'Change Photo' : 'Attach Photo'}
+                </span>
+              </label>
+            </CardContent>
+          </Card>
           <InvoiceForm
             extractedData={extractedData || undefined}
             customer={selectedCustomer}
             onSubmit={handleInvoiceSubmit}
             isLoading={isUploading}
           />
+          </>
         )}
 
         {step === 'preview' && selectedCustomer && createdInvoice && (
