@@ -74,7 +74,7 @@ serve(async (req) => {
             role: "system",
             content: `You are an invoice data extraction assistant. Extract the following information from the invoice image:
 1. Invoice date (in YYYY-MM-DD format)
-2. Invoice number
+2. Invoice number. Saudi invoices are often bilingual. Look for labels like "رقم الفاتورة", "فاتورة رقم", "رقم الفاتورة الضريبية", "Invoice No", "Invoice #", "Bill No", "Inv No", "Receipt No", "رقم الإيصال". Return the number/code next to that label exactly as printed (convert Arabic-Indic digits ٠١٢٣٤٥٦٧٨٩ to 0-9). Do NOT return the VAT/tax registration number (15 digits starting with 3), CR number, or phone number.
 3. Total amount (just the number, without currency symbol)
 
 Return ONLY a JSON object with these exact keys: invoice_date, invoice_number, amount

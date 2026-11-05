@@ -107,15 +107,16 @@ export default function Capture() {
     try {
       const imageBase64 = await getOptimizedImageBase64(file);
       const { data, error } = await supabase.functions.invoke('extract-invoice', { body: { imageBase64 } });
-      const num = (data?.invoice_number || '').toString().trim();
+      const ai = data?.data || {};
+      const num = (ai?.invoice_number || '').toString().trim();
       if (error || !num) {
         toast({ title: 'Invoice number nahi mila', description: 'Please type it manually.', variant: 'destructive' });
         return;
       }
       setExtractedData((prev) => ({
         invoice_number: num,
-        invoice_date: prev?.invoice_date || data?.invoice_date || '',
-        amount: prev?.amount || data?.amount || '',
+        invoice_date: prev?.invoice_date || ai?.invoice_date || '',
+        amount: prev?.amount || ai?.amount || '',
         invoice_time: prev?.invoice_time,
       }) as ExtractedInvoiceData);
       toast({ title: 'Invoice number mil gaya', description: num });
