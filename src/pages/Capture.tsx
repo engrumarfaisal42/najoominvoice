@@ -100,6 +100,31 @@ export default function Capture() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [invoiceTime, setInvoiceTime] = useState('');
+  const [isScanningNumber, setIsScanningNumber] = useState(false);
+
+  const scanInvoiceNumber = async (file: File) => {
+    setIsScanningNumber(true);
+    try {
+      const imageBase64 = await getOptimizedImageBase64(file);
+      const { data, error } = await supabase.functions.invoke('extract-invoice', { body: { imageBase64 } });
+      const num = (data?.invoice_number || '').toString().trim();
+      if (error || !num) {
+        toast({ title: 'Invoice number nahi mila', description: 'Please type it manually.', variant: 'destructive' });
+        return;
+      }
+      setExtractedData((prev) => ({
+        invoice_number: num,
+        invoice_date: prev?.invoice_date || data?.invoice_date || '',
+        amount: prev?.amount || data?.amount || '',
+        invoice_time: prev?.invoice_time,
+      }) as ExtractedInvoiceData);
+      toast({ title: 'Invoice number mil gaya', description: num });
+    } catch {
+      toast({ title: 'Invoice number nahi mila', description: 'Please type it manually.', variant: 'destructive' });
+    } finally {
+      setIsScanningNumber(false);
+    }
+  };
 
   const handleCustomerSelect = (customer: Customer) => {
     setSelectedCustomer(customer);
@@ -408,11 +433,32 @@ export default function Capture() {
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) setCapturedImage(f);
+                    if (f) { setCapturedImage(f); scanInvoiceNumber(f); }
+                    e.target.value = '';
                   }}
                 />
                 <span className="inline-flex w-full items-center justify-center h-11 rounded-md border border-input bg-background text-sm font-medium cursor-pointer hover:bg-accent">
                   {capturedImage && capturedImage.size > 0 ? 'Change Photo' : 'Attach Photo'}
+                </span>
+              </label>
+              <label className="block">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  disabled={isScanningNumber}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      if (!capturedImage || capturedImage.size === 0) setCapturedImage(f);
+                      scanInvoiceNumber(f);
+                    }
+                    e.target.value = '';
+                  }}
+                />
+                <span className="inline-flex w-full items-center justify-center h-11 rounded-md bg-primary text-primary-foreground text-sm font-medium cursor-pointer">
+                  {isScanningNumber ? 'Reading Invoice Number...' : '✨ Scan Invoice Number with AI'}
                 </span>
               </label>
             </CardContent>
