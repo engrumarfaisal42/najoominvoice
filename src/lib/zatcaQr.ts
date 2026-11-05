@@ -34,15 +34,21 @@ export function parseZatcaQr(raw: string): ZatcaQrData | null {
       let len = bytes[i + 1];
       let start = i + 2;
       // BER long-form length (Phase 2 signature/key fields can exceed 127 bytes)
-      if (len & 0x80 && tag > 5) {
+      if (len & 0x80) {
         const n = len & 0x7f;
-        if (n > 0 && n <= 2 && start + n <= bytes.length) {
+        if (n > 0 && n <= 3 && start + n <= bytes.length) {
           len = 0;
           for (let k = 0; k < n; k++) len = (len << 8) | bytes[start + k];
           start += n;
         }
       }
-      if (start + len > bytes.length) break;
+      if (start + len > bytes.length) {
+        if (tag >= 1 && tag <= 5) {
+          const value = decoder.decode(bytes.slice(start)).trim();
+          if (tag === 4 && !out.total) out.total = value;
+        }
+        break;
+      }
       if (tag >= 1 && tag <= 5) {
         const value = decoder.decode(bytes.slice(start, start + len)).trim();
         if (tag === 1) out.seller = value;
