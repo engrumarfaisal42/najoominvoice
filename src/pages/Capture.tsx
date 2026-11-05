@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import QrScanner from '@/components/invoice/QrScanner';
 import { parseZatcaQr, zatcaDateToInput, zatcaTimeToInput } from '@/lib/zatcaQr';
+import { decodeFile } from '@/lib/qr-decode';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/layout/AppLayout';
 import CameraCapture from '@/components/invoice/CameraCapture';
@@ -131,27 +132,28 @@ export default function Capture() {
 
     try {
       const sessionToken = localStorage.getItem('invoice_app_session') || '';
+      const qrPromise = decodeFile(file).then((t) => (t ? parseZatcaQr(t) : null)).catch(() => null);
       const optimizedImageBase64 = await getOptimizedImageBase64(file);
-      console.log('[Capture] Invoking extract-invoice, image size:', file.size, 'optimized base64 len:', optimizedImageBase64.length);
-      const { data, error } = await supabase.functions.invoke('extract-invoice', {
+      const aiPromise = supabase.functions.invoke('extract-invoice', {
         body: { imageBase64: optimizedImageBase64 },
         headers: { 'x-session-token': sessionToken },
       });
+      const [qr, { data, error }] = await Promise.all([qrPromise, aiPromise]);
 
-      console.log('[Capture] extract-invoice response:', { data, error });
+      if (error && !qr) throw error;
 
-      if (error) throw error;
-
-      if (data?.success && data?.data) {
+      const ai = data?.success ? data.data : null;
+      if (qr || ai) {
+        // QR is exact for amount/date/time; AI supplies invoice number
         setExtractedData({
-          invoice_number: data.data.invoice_number || '',
-          invoice_date: data.data.invoice_date || '',
-          amount: data.data.amount || '',
+          invoice_number: ai?.invoice_number || '',
+          invoice_date: qr ? zatcaDateToInput(qr.timestamp) || ai?.invoice_date || '' : ai?.invoice_date || '',
+          amount: qr ? parseFloat(qr.total!).toFixed(2) : ai?.amount || '',
+          invoice_time: qr ? zatcaTimeToInput(qr.timestamp) : undefined,
         });
-        const hasAny = data.data.invoice_number || data.data.invoice_date || data.data.amount;
         toast({
-          title: hasAny ? 'Invoice data extracted!' : 'No data found',
-          description: hasAny ? undefined : 'Please enter the details manually',
+          title: qr ? 'QR + AI data extracted!' : 'Invoice data extracted!',
+          description: qr ? 'Amount, date & time from QR' : 'No QR found — please check the amount',
         });
       } else {
         toast({
